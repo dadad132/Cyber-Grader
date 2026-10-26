@@ -1,0 +1,71 @@
+{% extends "admin/base.html" %}
+{% import "macros.html" as ui with context %}
+{% block admin_title %}Dashboard{% endblock %}
+{% block content %}
+<main class="wrap page">
+  <h1>Dashboard</h1>
+  {% set todo = checklist|selectattr('status', 'equalto', 'fail')|list %}
+  <p class="lead">{% if todo %}{{ todo|length }} thing{{ '' if todo|length == 1 else 's' }} to finish before customers can sign up and pay.{% else %}Your site is ready for customers.{% endif %}</p>
+
+  <div class="stats">
+    <div class="stat"><span>Customers</span><strong>{{ stats.users }}</strong><small>{{ stats.new_users }} new this week</small></div>
+    <div class="stat"><span>Checks this week</span><strong>{{ stats.scans }}</strong><small>by customers</small></div>
+    <div class="stat"><span>Revenue, last 30 days</span><strong>{{ money(stats.revenue) }}</strong><small>live payments only</small></div>
+    <div class="stat"><span>Waiting for payment</span><strong>{{ stats.pending }}</strong><small><a href="{{ url_for('admin.payments', status='pending') }}">View</a></small></div>
+    <div class="stat"><span>Free checks this week</span><strong>{{ stats.free_checks }}</strong><small>by visitors</small></div>
+    <div class="stat"><span>New leads</span><strong>{{ stats.new_leads }}</strong><small><a href="{{ url_for('admin.leads', status='new') }}">View</a></small></div>
+  </div>
+
+  <section class="panel">
+    <div class="headline"><h2>Go-live checklist</h2><a class="btn btn-secondary btn-small" href="{{ url_for('admin.settings_home') }}">Open settings</a></div>
+    {% with items = checklist %}{% include "admin/_checks.html" %}{% endwith %}
+  </section>
+
+  <section class="panel">
+    <div class="headline"><h2>Recent payments</h2><a href="{{ url_for('admin.payments') }}">All payments →</a></div>
+    {% if orders %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>When</th><th>Customer</th><th>Item</th><th class="num">Amount</th><th>Status</th></tr></thead>
+      <tbody>{% for o in orders %}
+        <tr><td>{{ o.created_at|ago }}</td><td><a href="{{ url_for('admin.user_detail', user_id=o.user_id) }}">{{ o.email }}</a></td>
+          <td class="wrap-cell">{{ o.description }}{% if o.mode == 'test' %} <span class="tag">test</span>{% endif %}</td>
+          <td class="num">{{ money(o.amount_cents) }}</td><td>{{ ui.status_tag(o.status) }}</td></tr>
+      {% endfor %}</tbody></table></div>
+    {% else %}<p class="empty">No payments yet.</p>{% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="headline"><h2>Recent free checks</h2></div>
+    {% if previews %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>When</th><th>Domain</th><th>Grade</th><th>Unlocked by owner</th><th></th></tr></thead>
+      <tbody>{% for p in previews %}
+        <tr><td>{{ p.created_at|ago }}</td><td>{{ p.domain }}</td><td>{{ ui.grade_chip(p.grade) }}</td>
+          <td>{{ p.unlocked_by or '' }}</td><td><a href="{{ url_for('preview.show', token=p.token) }}" target="_blank" rel="noopener">Open</a></td></tr>
+      {% endfor %}</tbody></table></div>
+    {% else %}<p class="empty">No free checks yet.</p>{% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="headline"><h2>Recent checks</h2></div>
+    <form class="scanbox" action="{{ url_for('admin.test') }}" method="get" data-busy="Checking…">
+      <input name="domain" type="text" inputmode="url" spellcheck="false" required placeholder="Free test check: yourdomain.com" aria-label="Domain to test">
+      <button class="btn" type="submit">Run test check</button></form>
+    {% if scans %}
+    <div class="table-wrap" style="margin-top:14px"><table>
+      <thead><tr><th>When</th><th>Domain</th><th>Grade</th><th>By</th><th>Paid with</th></tr></thead>
+      <tbody>{% for s in scans %}
+        <tr><td>{{ s.created_at|ago }}</td><td>{{ s.domain }}</td><td>{{ ui.grade_chip(s.grade) }}</td>
+          <td>{{ s.email or 'super admin' }}</td><td>{{ s.paid_with }}</td></tr>
+      {% endfor %}</tbody></table></div>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="headline"><h2>System check</h2>
+      <form method="post" action="{{ url_for('admin.refresh_checks') }}">{{ csrf_field() }}<button class="btn btn-secondary btn-small" type="submit">Run again</button></form></div>
+    <p class="sub">Whether this server can grade domains correctly.</p>
+    {% with items = checks %}{% include "admin/_checks.html" %}{% endwith %}
+  </section>
+</main>
+{% endblock %}

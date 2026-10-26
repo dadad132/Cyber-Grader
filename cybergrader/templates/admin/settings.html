@@ -1,0 +1,197 @@
+{% extends "admin/base.html" %}
+{% import "macros.html" as ui with context %}
+{% block admin_title %}Settings{% endblock %}
+{% block content %}
+<main class="wrap page">
+  <h1>Settings</h1>
+  <p class="actions">{% for key, label in sections %}
+    <a class="btn btn-small {{ '' if section == key else 'btn-secondary' }}" href="{{ url_for('admin.settings_page', section=key) }}">{{ label }}</a>
+  {% endfor %}</p>
+
+{% if section == 'general' %}
+  <form method="post">{{ csrf_field() }}
+  <section class="panel"><h2>Website & business details</h2>
+    <p class="sub">Shown in the site header and footer, in the contact box at the end of reports, and on emails.</p>
+    {{ ui.field('site_url', 'Website address of this grader', values.site_url, type='url', placeholder='https://grader.yourdomain.co.za',
+                help='The public address customers use. Payment links, emails and the Yoco webhook are built from it. The installer sets it.') }}
+    <div class="grid2">
+      {{ ui.field('brand_name', 'Business name', values.brand_name, placeholder='EasyMikroTik') }}
+      {{ ui.field('brand_url', 'Business website', values.brand_url, type='url', placeholder='https://easymikrotik.com') }}
+      {{ ui.field('contact_email', 'Contact email', values.contact_email, type='email', placeholder='support@yourdomain.co.za') }}
+      {{ ui.field('contact_phone', 'Contact phone', values.contact_phone, type='tel', placeholder='+27 21 000 0000') }}
+    </div>
+    {{ ui.field('cta_text', 'Report call-to-action', values.cta_text, placeholder='Want help closing these gaps?',
+                help='The heading of the contact box on downloaded reports.') }}
+  </section>
+  <section class="panel"><h2>Scanning</h2>
+    <p class="sub">The defaults suit most servers. The system check on the dashboard tells you if anything needs changing.</p>
+    <div class="grid2">
+      {{ ui.field('timeout', 'Network timeout (seconds)', '%g'|format(values.timeout), type='number', attrs='min="2" max="30" step="0.5" required') }}
+      {{ ui.field('nameservers', 'DNS servers', values.nameservers|join(', '), placeholder="Blank = the server's DNS",
+                  help='Up to 4 IPs, e.g. <code>1.1.1.1, 8.8.8.8</code>. Only if the system check flags DNS.') }}
+    </div>
+    {{ ui.field('user_agent', 'Scanner user agent', values.user_agent, placeholder=default_user_agent,
+                help='Leave blank unless many sites block the scanner (reports then note an HTTP 403 homepage).') }}
+  </section>
+  <section class="panel"><h2>Abuse protection</h2>
+    <div class="grid2">
+      {{ ui.field('rate_limit', 'Checks per account per 10 minutes', values.rate_limit, type='number', attrs='min="1" max="1000" required') }}
+      {{ ui.field('max_concurrent', 'Simultaneous checks', values.max_concurrent, type='number', attrs='min="1" max="32" required',
+                  help='Extra requests wait their turn.') }}
+    </div>
+    {{ ui.checkbox('trust_proxy', 'This app runs behind a reverse proxy (nginx)', values.trust_proxy,
+                   'Ticked by the installer. Leave unticked when running directly on a PC.') }}
+  </section>
+  <button class="btn" type="submit">Save</button></form>
+
+{% elif section == 'payments' %}
+  <form method="post">{{ csrf_field() }}
+  <section class="panel"><h2>Charging</h2>
+    {{ ui.checkbox('charge_for_checks', 'Charge for checks', values.charge_for_checks,
+                   'Untick to make every check, full report and PDF free (no credits used), e.g. while you build up clients. '
+                   'Tick it again to start charging; credits and plans people already have are kept.') }}
+  </section>
+  <section class="panel"><h2>Yoco</h2>
+    <p class="sub">Customers pay on Yoco's secure checkout page. Get your keys in the Yoco app or portal under <em>Sales › Payment gateway</em>
+      (or <em>Yoco Connect › How to connect</em>). Test keys work straight away; live keys unlock once your domain is verified there.</p>
+    {{ ui.field('yoco_secret_key', 'Secret key', '', type='password',
+                placeholder=(values.yoco_secret_key[:8] ~ '…' ~ values.yoco_secret_key[-4:] ~ ' (saved, leave blank to keep)') if values.yoco_secret_key else 'sk_test_… or sk_live_…',
+                help='Kept on the server only. ' ~ ('Currently: <strong>' ~ values.yoco_mode|upper ~ '</strong> mode.' if values.yoco_mode else ''),
+                attrs='autocomplete="off"') }}
+    <dl class="kv">
+      <dt>Webhook URL</dt><dd>{% if webhook_url %}<code>{{ webhook_url }}</code>{% else %}Set the website address first.{% endif %}</dd>
+      <dt>Webhook status</dt><dd>{% if values.yoco_webhook_secret %}<span class="tag tag-ok">registered</span> {{ values.yoco_webhook_mode }} mode{% if values.yoco_webhook_url and values.yoco_webhook_url != webhook_url %} · registered for {{ values.yoco_webhook_url }}{% endif %}
+        {% else %}<span class="tag tag-err">not registered</span> payments can't be confirmed automatically{% endif %}</dd>
+    </dl>
+    <p class="actions" style="margin-top:12px"><button class="btn btn-secondary" type="submit" form="webhook-form">Register webhook with Yoco</button>
+      <span class="help">Save your secret key first. Register again whenever you switch between test and live keys.</span></p>
+    {{ ui.field('yoco_webhook_secret', 'Webhook secret (only if you registered the webhook yourself)', '', type='password',
+                placeholder='whsec_… (saved)' if values.yoco_webhook_secret else 'whsec_…', attrs='autocomplete="off"') }}
+  </section>
+  <section class="panel"><h2>Free checks</h2>
+    {{ ui.field('signup_credits', 'Free credits for new accounts', values.signup_credits, type='number', attrs='min="0" max="100" required',
+                help='Set to 0 to require payment for every check.') }}
+  </section>
+  <section class="panel"><h2>Credit packs</h2>
+    <p class="sub">One credit = one check. Prices in rand {{ 'including VAT' if values.vat_registered else '(you are not VAT registered)' }}. Leave a name blank to hide that pack.</p>
+    {% for i in range(max_packs) %}{% set p = values.credit_packs[i] if i < values.credit_packs|length else {} %}
+    <div class="grid3">
+      {{ ui.field('pack_' ~ i ~ '_name', 'Pack ' ~ (i + 1) ~ ' name', p.get('name', ''), placeholder='e.g. 10 checks') }}
+      {{ ui.field('pack_' ~ i ~ '_credits', 'Credits', p.get('credits', ''), type='number', attrs='min="1"') }}
+      {{ ui.field('pack_' ~ i ~ '_price', 'Price (R)', '%.2f'|format(p.price_cents / 100) if p else '', placeholder='199.00', attrs='inputmode="decimal"') }}
+    </div>{% endfor %}
+  </section>
+  <section class="panel"><h2>Monthly plans</h2>
+    <p class="sub">Paid once through Yoco for the number of days below; Yoco can't debit automatically, so customers get a reminder email 3 days before the end with a renew link. 0 checks = unlimited.</p>
+    {% for i in range(max_plans) %}{% set p = values.plans[i] if i < values.plans|length else {} %}
+    <div class="grid2">
+      {{ ui.field('plan_' ~ i ~ '_name', 'Plan ' ~ (i + 1) ~ ' name', p.get('name', ''), placeholder='e.g. Monthly') }}
+      {{ ui.field('plan_' ~ i ~ '_price', 'Price (R)', '%.2f'|format(p.price_cents / 100) if p else '', placeholder='499.00', attrs='inputmode="decimal"') }}
+      {{ ui.field('plan_' ~ i ~ '_scans', 'Checks included', p.get('scans', 50), type='number', attrs='min="0"') }}
+      {{ ui.field('plan_' ~ i ~ '_days', 'Length (days)', p.get('days', 30), type='number', attrs='min="1" max="366"') }}
+    </div>{% if not loop.last %}<hr style="border:0;border-top:1px solid var(--border);margin:6px 0 16px">{% endif %}{% endfor %}
+  </section>
+  <button class="btn" type="submit">Save</button></form>
+  <form id="webhook-form" method="post" action="{{ url_for('admin.register_webhook') }}">{{ csrf_field() }}</form>
+
+{% elif section == 'growth' %}
+  <form method="post">{{ csrf_field() }}
+  <section class="panel"><h2>Free checks</h2>
+    <p class="sub">Anyone can check a domain from the home page and see its grade, score and how many problems it has. The details unlock
+      with a credit, for the verified owner, or for you.</p>
+    {{ ui.checkbox('free_checks_enabled', 'Offer free checks on the website', values.free_checks_enabled,
+                   'Strongly recommended: free checks are what people search for, and they turn into sign-ups and leads.') }}
+    {{ ui.field('free_checks_per_hour', 'Free checks per visitor per hour', values.free_checks_per_hour, type='number', attrs='min="1" max="100" required',
+                help="Re-checking the same domain within an hour reuses the result and doesn't count.") }}
+    {{ ui.checkbox('owner_unlock_free', 'Let verified owners unlock their own report free', values.owner_unlock_free,
+                   'They prove ownership with a 6-digit code sent to an address at that domain (expires in 15 minutes, 5 attempts). '
+                   'Every verified owner becomes a lead. Needs email to be set up.') }}
+  </section>
+  <section class="panel"><h2>"Have us fix it" quotes</h2>
+    <p class="sub">Every report offers a quote request with a typical starting price based on how much work the report needs.
+      Requests appear under Leads and are emailed to you.</p>
+    {{ ui.checkbox('dfy_enabled', 'Show the "have us fix it" quote request', values.dfy_enabled) }}
+    <div class="grid3">
+      {{ ui.field('dfy_minor', 'Minor tune-up (grades A-B), from R', '%.2f'|format(values.dfy_minor_cents / 100), attrs='inputmode="decimal"') }}
+      {{ ui.field('dfy_moderate', 'Moderate fixes (score 60+), from R', '%.2f'|format(values.dfy_moderate_cents / 100), attrs='inputmode="decimal"') }}
+      {{ ui.field('dfy_critical', 'Urgent overhaul (below 60), from R', '%.2f'|format(values.dfy_critical_cents / 100), attrs='inputmode="decimal"') }}
+    </div>
+    {{ ui.field('lead_notify_email', 'Email new leads to', values.lead_notify_email, type='email', placeholder=values.contact_email or 'sales@yourdomain.co.za',
+                help='Leave blank to use your contact email.') }}
+  </section>
+  <section class="panel"><h2>Google Search Console</h2>
+    <p class="sub">Add your site at <a href="https://search.google.com/search-console" target="_blank" rel="noopener">search.google.com/search-console</a>,
+      choose the <em>HTML tag</em> verification method and paste the tag (or just its content value) here. Then submit
+      <code>{{ (values.site_url or '') ~ '/sitemap.xml' }}</code> in Search Console so Google finds every page.</p>
+    {{ ui.field('google_site_verification', 'Verification code', values.google_site_verification, placeholder='<meta name="google-site-verification" content="…">') }}
+  </section>
+  <button class="btn" type="submit">Save</button></form>
+
+{% elif section == 'invoices' %}
+  <form method="post">{{ csrf_field() }}
+  <section class="panel"><h2>Your business on invoices</h2>
+    <p class="sub">Copied onto each invoice when it's issued, so changes only affect new invoices.</p>
+    <div class="grid2">
+      {{ ui.field('legal_name', 'Registered business name', values.legal_name, placeholder='EasyMikroTik (Pty) Ltd') }}
+      {{ ui.field('registration_number', 'Company registration number', values.registration_number, placeholder='2020/123456/07') }}
+    </div>
+    {{ ui.textarea('business_address', 'Business address', values.business_address) }}
+  </section>
+  <section class="panel"><h2>VAT</h2>
+    {{ ui.checkbox('vat_registered', 'We are registered for VAT', values.vat_registered,
+                   'Invoices become "Tax invoices" showing your VAT number and the VAT included in each price (prices you set are VAT-inclusive).') }}
+    <div class="grid2">
+      {{ ui.field('vat_number', 'VAT number', values.vat_number, placeholder='4123456789') }}
+      {{ ui.field('vat_rate', 'VAT rate (%)', '%g'|format(values.vat_rate), type='number', attrs='min="0" max="30" step="0.01"') }}
+    </div>
+  </section>
+  <section class="panel"><h2>Numbering & notes</h2>
+    {{ ui.field('invoice_prefix', 'Invoice number prefix', values.invoice_prefix, help='Invoices are numbered PREFIX-00001, PREFIX-00002, … with no gaps. Test-mode payments use TEST-PREFIX.') }}
+    {{ ui.textarea('invoice_notes', 'Notes printed on every invoice', values.invoice_notes, placeholder='Thank you for your business. Questions? support@…') }}
+  </section>
+  <button class="btn" type="submit">Save</button></form>
+
+{% elif section == 'email' %}
+  <form method="post">{{ csrf_field() }}
+  <section class="panel"><h2>Outgoing email (SMTP)</h2>
+    <p class="sub">Used for invoices, password resets, welcome emails and plan reminders. Any mail provider works: Microsoft 365
+      (<code>smtp.office365.com</code>, port 587, STARTTLS), Google Workspace (<code>smtp.gmail.com</code>, 587, app password), or your host's SMTP server.</p>
+    <div class="grid2">
+      {{ ui.field('smtp_host', 'SMTP server', values.smtp_host, placeholder='smtp.office365.com') }}
+      {{ ui.field('smtp_port', 'Port', values.smtp_port, type='number', attrs='min="1" max="65535" required') }}
+      <div class="field"><label for="smtp_security">Connection security</label><select id="smtp_security" name="smtp_security">
+        {% for key, label in (('starttls', 'STARTTLS (usually port 587)'), ('ssl', 'SSL/TLS (usually port 465)'), ('none', 'None (not recommended)')) %}
+        <option value="{{ key }}"{% if values.smtp_security == key %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+      {{ ui.field('mail_from', 'From address', values.mail_from, placeholder='EasyMikroTik <noreply@yourdomain.co.za>') }}
+      {{ ui.field('smtp_username', 'Username', values.smtp_username, attrs='autocomplete="off"') }}
+      {{ ui.field('smtp_password', 'Password', '', type='password', placeholder='(saved, leave blank to keep)' if values.smtp_password else '', attrs='autocomplete="new-password"') }}
+    </div>
+  </section>
+  <button class="btn" type="submit">Save</button></form>
+  <section class="panel" style="margin-top:16px"><h2>Send a test email</h2>
+    <form method="post" action="{{ url_for('admin.test_email') }}" class="scanbox">{{ csrf_field() }}
+      <input name="to" type="email" placeholder="{{ values.contact_email or 'you@example.com' }}" aria-label="Send test to">
+      <button class="btn btn-secondary" type="submit">Send test</button></form></section>
+
+{% elif section == 'legal' %}
+  <form method="post">{{ csrf_field() }}
+  <section class="panel"><h2>Terms of service</h2>
+    <p class="sub">Shown at <a href="{{ url_for('site.terms') }}" target="_blank">/terms</a>. Blank lines start new paragraphs. Yoco and POPIA expect clear terms, a refund policy and a privacy policy on your site.</p>
+    {{ ui.textarea('terms_text', 'Terms', values.terms_text, cls='tall') }}</section>
+  <section class="panel"><h2>Privacy policy</h2>
+    <p class="sub">Shown at <a href="{{ url_for('site.privacy') }}" target="_blank">/privacy</a>.</p>
+    {{ ui.textarea('privacy_text', 'Privacy policy', values.privacy_text, cls='tall') }}</section>
+  <button class="btn" type="submit">Save</button></form>
+
+{% elif section == 'password' %}
+  <section class="panel"><h2>Change the super-admin password</h2>
+    <form method="post" action="{{ url_for('admin.change_password') }}">{{ csrf_field() }}
+      {{ ui.field('current', 'Current password', type='password', attrs='autocomplete="current-password" required') }}
+      <div class="grid2">
+        {{ ui.field('password', 'New password', type='password', help='At least 10 characters.', attrs='autocomplete="new-password" required') }}
+        {{ ui.field('confirm', 'Confirm new password', type='password', attrs='autocomplete="new-password" required') }}
+      </div>
+      <button class="btn" type="submit">Change password</button></form></section>
+{% endif %}
+</main>
+{% endblock %}

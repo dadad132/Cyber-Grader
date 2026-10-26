@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui with context %}
+{% block title %}Buy checks · {{ site.business_name }}{% endblock %}
+{% block content %}
+<main class="wrap page">
+  <h1>Buy checks</h1>
+  <p class="lead">You have <strong>{{ current_user.credits }}</strong> credit{{ '' if current_user.credits == 1 else 's' }}
+    {%- if plan.active %} and a {{ plan.name }} plan with {{ 'unlimited checks' if plan.unlimited else plan.scans_left ~ ' checks' }} until {{ plan.expires_at|date }}{% endif %}.
+    Buying the same plan again while it's active adds its days and checks on top.</p>
+  {% if not site.charge_for_checks %}
+  <p class="flash flash-info">Checks are free at the moment, so you don't need to buy anything to run a check or download its PDF.</p>
+  {% elif not site.payments_ready %}
+  <p class="flash flash-warn">Online payments aren't switched on yet.{% if site.contact_email %} To buy checks, email <a href="mailto:{{ site.contact_email }}">{{ site.contact_email }}</a>.{% endif %}</p>
+  {% endif %}
+  {{ ui.price_cards(products, true, site.payments_ready) }}
+  <p class="pricing-note">You'll be taken to Yoco's secure payment page and brought back here afterwards.</p>
+</main>
+{% endblock %}

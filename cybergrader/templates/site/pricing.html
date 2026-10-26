@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui with context %}
+{% block title %}Pricing · {{ site.business_name }}{% endblock %}
+{% block content %}
+<main class="wrap page">
+  <h1>Pricing</h1>
+  <p class="lead">One credit is one check of one domain. Buy credits as you need them, or take a monthly plan if you check domains regularly.
+    {% if site.signup_credits %}New accounts get {{ site.signup_credits }} free check{{ '' if site.signup_credits == 1 else 's' }}.{% endif %}</p>
+  {{ ui.price_cards(products, current_user is not none, site.payments_ready) }}
+</main>
+{% endblock %}

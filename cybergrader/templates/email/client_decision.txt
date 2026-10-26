@@ -1,0 +1,10 @@
+Hello,
+
+{{ client.contact_email }} has {{ status }} your access to security checks for {{ client.domain }} ({{ client.name }}).
+{% if status == 'approved' %}
+You can now email them reports and quotes from their client page:
+{% else %}
+You won't be able to email them reports. Their client page:
+{% endif %}{{ link }}
+
+{{ settings.business_name }}

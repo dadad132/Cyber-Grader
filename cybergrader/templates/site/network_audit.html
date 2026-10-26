@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}How to run a building network audit · {{ site.business_name }}{% endblock %}
+{% block content %}
+<main class="wrap page guide">
+  <h1>How to run a building network audit</h1>
+  <p class="lead">Check an office's Wi-Fi and network from the inside: the router's admin ports, devices that expose file shares,
+    Remote Desktop, cameras or printers to everyone, UPnP, Wi-Fi encryption and signal, and latency. Results go straight into your
+    account with a grade and a fix list.</p>
+  <p class="flash flash-warn">Only audit networks you own or are authorised to test. The audit connects to devices on the local
+    network (it doesn't change anything or try passwords), which can still alarm a network's owner if they didn't agree to it.</p>
+
+  <section class="panel">
+    <h2>Before you start (once)</h2>
+    <ol>
+      <li>{% if current_user %}You're signed in.{% else %}<a href="{{ url_for('site.signup') }}">Create an account</a> or <a href="{{ url_for('site.login', next=url_for('site.network_audit_guide')) }}">log in</a>.{% endif %}</li>
+      <li>Go to <a href="{{ url_for('site.account') }}#api">Account › API access</a> and click <strong>Create API key</strong>. Copy the key
+        (it starts with <code>cg_</code>); it's only shown once. Audits don't use credits.</li>
+      <li>At the site, connect your phone or laptop to the building's Wi-Fi (or plug the laptop into the network). Mobile data won't work.</li>
+    </ol>
+  </section>
+
+  <section class="panel">
+    <h2>Option 1: Android phone app</h2>
+    {% if app_available %}
+    <ol>
+      <li>On the phone, open this page and tap <a class="btn btn-small" href="{{ url_for('site.download_app') }}">Download the app (.apk)</a></li>
+      <li>Open the downloaded file. Android will ask you to allow your browser to <em>install unknown apps</em>: allow it, then tap <strong>Install</strong>.
+        (Google Play Protect may warn that the app is unrecognised because it isn't from the Play Store; choose <em>Install anyway</em>.)</li>
+      <li>Open <strong>Building Network Audit</strong> and fill in:
+        <ul>
+          <li><strong>Grader address:</strong> <code>{{ server }}</code></li>
+          <li><strong>API key:</strong> the <code>cg_…</code> key from your account</li>
+          <li><strong>Site name:</strong> e.g. <em>Company A, 2nd floor</em>, and the client's domain if you have one</li>
+          <li><strong>Wi-Fi security:</strong> look at the router or the phone's Wi-Fi settings (tap the connected network). Choose <em>Not sure</em> if you can't tell; it's then left out of the score.</li>
+        </ul>
+        The app remembers these for next time.</li>
+      <li>Tap <strong>Run audit</strong>. It takes one to two minutes; keep the phone on the Wi-Fi with the screen on.</li>
+      <li>The grade and fixes appear on the phone, and the full audit is saved under <a href="{{ url_for('site.dashboard') }}">Dashboard › Building network audits</a>.</li>
+    </ol>
+    {% else %}
+    <p class="sub">The Android app isn't available for download on this site yet. Use the laptop option below.</p>
+    {% endif %}
+    <p class="sub">iPhone: not available yet (Apple only allows apps through the App Store). Use a laptop instead.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Option 2: laptop (Windows, Mac or Linux)</h2>
+    <ol>
+      <li>Install Python 3 from <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a> if it isn't already
+        (on Windows, tick <em>Add python.exe to PATH</em>).</li>
+      <li><a href="{{ url_for('site.download_agent') }}">Download the audit agent</a> (<code>lan_agent.py</code>, a single file).</li>
+      <li>Open a terminal (Windows: <em>Command Prompt</em>) in the folder where it downloaded and run:
+        <pre><code>python lan_agent.py --server {{ server }} --api-key cg_YOUR_KEY --site "Company A office"</code></pre>
+        On Windows and Linux the agent reads the Wi-Fi name, security and signal itself. Add <code>--wifi-security WPA2</code> to set it by hand.</li>
+      <li>It prints the grade and fixes, and a link to the full audit in your account.</li>
+    </ol>
+    <p class="sub">No internet at the site? Use <code>--output audit.json</code> to save the results instead of uploading.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Inside vs the internet-facing side</h2>
+    <p>The audit mostly checks the network from the <strong>inside</strong>: what one device on the Wi-Fi or LAN can reach.
+      It also runs one <strong>outside</strong> check: the grader server, which is on the internet, looks back at this
+      network's own public address and reports whether router-management ports (Winbox, the RouterOS API, Telnet, FTP,
+      Remote Desktop…) are open to the whole internet. This is the single most important check for a MikroTik router.</p>
+    <p class="sub">It only ever checks the public address this audit is uploaded from, i.e. the network you're connected to,
+      never anyone else's. Running the audit on your PC at the office won't test this (a device can't reach its own public IP
+      from inside); it works once the grader is on a real server on the internet and you upload from the office.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Reading the results</h2>
+    <ul>
+      <li><strong>Grade and score</strong> cover only what was measured. Anything the device couldn't check (for example Wi-Fi
+        security on a laptop plugged into a cable, or internet exposure during a local test) is listed under <em>Not checked</em>
+        and left out of the score.</li>
+      <li><strong>Exposed to the internet</strong>: a router-management port open to the whole internet is the most urgent thing
+        to fix; close it and allow it only from the LAN or a VPN.</li>
+      <li><strong>Critical / high</strong>: Telnet or FTP open on the router, open (password-less) Wi-Fi, file shares or Remote
+        Desktop reachable from the Wi-Fi, UPnP switched on. Fix these first.</li>
+      <li><strong>Network segmentation</strong> findings list which device addresses exposed what, so you know which device to move to
+        its own VLAN.</li>
+      <li>The audit sees the network from where the device is connected. Run it on each Wi-Fi (staff, guest) to compare them.</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2>If something goes wrong</h2>
+    <ul>
+      <li><strong>"Connect to the building Wi-Fi first"</strong>: the phone is on mobile data or not connected to Wi-Fi.</li>
+      <li><strong>"A valid API key is required"</strong>: copy the key again from Account (create a new one if you've lost it).</li>
+      <li><strong>Can't reach the server</strong>: check the grader address, including <code>https://</code>, and that the phone has internet through the Wi-Fi.</li>
+      <li><strong>Every device shows as closed</strong>: some Wi-Fi networks isolate clients from each other (common on guest Wi-Fi), which is good. The audit then mostly sees the router.</li>
+    </ul>
+  </section>
+</main>
+{% endblock %}

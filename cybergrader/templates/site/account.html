@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui with context %}
+{% block title %}Account · {{ site.business_name }}{% endblock %}
+{% block content %}
+<main class="wrap page">
+  <h1>Account</h1>
+  <p class="lead">Signed in as {{ current_user.email }}.</p>
+
+  <section class="panel">
+    <h2>Your details</h2>
+    <p class="sub">Shown on your invoices. Add a VAT number and address if your business needs a full tax invoice.</p>
+    <form method="post" action="{{ url_for('site.update_profile') }}">{{ csrf_field() }}
+      <div class="grid2">
+        {{ ui.field('name', 'Name', current_user.name, attrs='autocomplete="name" required') }}
+        {{ ui.field('company', 'Company', current_user.company, attrs='autocomplete="organization"') }}
+        {{ ui.field('vat_number', 'VAT number', current_user.vat_number) }}
+      </div>
+      {{ ui.textarea('address', 'Billing address', current_user.address, attrs='autocomplete="street-address"') }}
+      <button class="btn" type="submit">Save details</button>
+    </form>
+  </section>
+
+  <section class="panel" id="branding">
+    <h2>Your business on client reports</h2>
+    <p class="sub">For IT providers: when set, PDFs you download and reports you send from <a href="{{ url_for('clients.index') }}">Clients</a>
+      carry your name and contact details (with a small "powered by {{ site.business_name }}"), and clients' replies come to you.</p>
+    <form method="post" action="{{ url_for('site.update_branding') }}">{{ csrf_field() }}
+      <div class="grid2">
+        {{ ui.field('firm_name', 'Business name', current_user.firm_name, placeholder=current_user.company or 'Your IT company') }}
+        {{ ui.field('firm_email', 'Email for client replies', current_user.firm_email, type='email', placeholder=current_user.email) }}
+        {{ ui.field('firm_phone', 'Phone', current_user.firm_phone, type='tel') }}
+        {{ ui.field('firm_url', 'Website', current_user.firm_url, type='url', placeholder='https://') }}
+      </div>
+      <button class="btn btn-secondary" type="submit">Save business details</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Change password</h2>
+    <form method="post" action="{{ url_for('site.change_password') }}">{{ csrf_field() }}
+      {{ ui.field('current', 'Current password', type='password', attrs='autocomplete="current-password" required') }}
+      <div class="grid2">
+        {{ ui.field('password', 'New password', type='password', help='At least 10 characters.', attrs='autocomplete="new-password" minlength="10" required') }}
+        {{ ui.field('confirm', 'Confirm new password', type='password', attrs='autocomplete="new-password" required') }}
+      </div>
+      <button class="btn btn-secondary" type="submit">Change password</button>
+    </form>
+  </section>
+
+  <section class="panel" id="api">
+    <h2>API access</h2>
+    <p class="sub">Run checks from your own scripts or tools. Each API check uses a credit or plan check, just like the website.</p>
+    {% if new_key %}
+      <p class="flash flash-ok">Your new API key. Copy it now; it won't be shown again:<br><code>{{ new_key }}</code></p>
+    {% elif current_user.api_key_hint %}
+      <p>Current key: <code>{{ current_user.api_key_hint }}</code></p>
+    {% endif %}
+    <p class="sub">Example: <code>curl -H "X-API-Key: YOUR_KEY" "{{ api_example }}"</code></p>
+    <p class="sub">The same key lets the on-site building network agent upload audits to your account:
+      <code>python lan_agent.py --server {{ api_example.split('/api/')[0] }} --api-key YOUR_KEY --site "Client office"</code>
+      (only audit networks you're authorised to test). <a href="{{ url_for('site.network_audit_guide') }}">Step-by-step guide, Android app and agent download</a></p>
+    <div class="actions">
+      <form method="post" action="{{ url_for('site.create_api_key') }}">{{ csrf_field() }}
+        <button class="btn btn-secondary" type="submit">{{ 'Replace API key' if current_user.api_key_hint else 'Create API key' }}</button></form>
+      {% if current_user.api_key_hint %}
+      <form method="post" action="{{ url_for('site.revoke_api_key') }}">{{ csrf_field() }}
+        <button class="btn btn-danger" type="submit">Revoke key</button></form>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Credit history</h2>
+    {% if ledger %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>When</th><th>What</th><th class="num">Change</th><th class="num">Balance</th></tr></thead>
+      <tbody>{% for row in ledger %}
+        <tr><td>{{ row.created_at|date(true) }}</td><td class="wrap-cell">{{ row.reason }}</td>
+          <td class="num">{{ '%+d'|format(row.change) }}</td><td class="num">{{ row.balance }}</td></tr>
+      {% endfor %}</tbody></table></div>
+    {% else %}<p class="empty">No credit changes yet.</p>{% endif %}
+  </section>
+</main>
+{% endblock %}

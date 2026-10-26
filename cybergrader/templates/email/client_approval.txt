@@ -1,0 +1,17 @@
+Hello,
+
+{{ firm }} looks after IT for {{ client.name }} and would like to run regular security checks on {{ client.domain }}
+(email spoofing protection, the website's certificate, security headers and DNS) and email the results to you.
+
+The checks only read public information; nothing on your systems is changed.
+
+To approve or decline, open this link (it works for {{ days }} days):
+{{ link }}
+
+You can withdraw access at any time with the same link.
+
+{{ firm }}{% if branding.email %}
+{{ branding.email }}{% endif %}{% if branding.phone %}
+{{ branding.phone }}{% endif %}
+
+Sent by {{ settings.business_name }} on behalf of {{ firm }}.

@@ -1,0 +1,33 @@
+{% extends "admin/base.html" %}
+{% block admin_title %}Leads{% endblock %}
+{% block content %}
+<main class="wrap page">
+  <h1>Leads</h1>
+  <p class="lead">"Have us fix it" requests from reports, free checks and building audits, plus domain owners who verified their
+    email to unlock a report. New leads are also emailed to {{ site.lead_inbox or 'your contact email (set one under Settings)' }}.</p>
+  <p class="actions">
+    <a class="btn btn-small {{ '' if not status else 'btn-secondary' }}" href="{{ url_for('admin.leads') }}">All</a>
+    {% for s in statuses %}<a class="btn btn-small {{ '' if status == s else 'btn-secondary' }}" href="{{ url_for('admin.leads', status=s) }}">{{ s|capitalize }}</a>{% endfor %}
+  </p>
+  <section class="panel">
+    {% if leads %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>When</th><th>Domain</th><th>Contact</th><th>Wants</th><th>Status</th></tr></thead>
+      <tbody>{% for l in leads %}
+        <tr>
+          <td>{{ l.created_at|date(true) }}</td>
+          <td><strong>{{ l.domain }}</strong>{% if l.grade %}<br><small>grade {{ l.grade }}{% if l.score is not none %} · {{ l.score }}/100{% endif %}</small>{% endif %}</td>
+          <td>{{ l.name }}<br><a href="mailto:{{ l.email }}">{{ l.email }}</a>{% if l.phone %}<br>{{ l.phone }}{% endif %}
+            {% if l.user_id %}<br><a href="{{ url_for('admin.user_detail', user_id=l.user_id) }}">customer account</a>{% endif %}</td>
+          <td class="wrap-cell"><span class="tag tag-info">{{ {'report': 'fix request', 'preview': 'fix request (free check)', 'owner': 'verified owner', 'lan': 'network fix'}.get(l.source, l.source) }}</span>
+            {% if l.tier %}<br><small>{{ l.tier }}</small>{% endif %}{% if l.message %}<br>{{ l.message }}{% endif %}</td>
+          <td><form method="post" action="{{ url_for('admin.lead_status', lead_id=l.id) }}">{{ csrf_field() }}
+            <input type="hidden" name="filter" value="{{ status }}">
+            <select name="status" aria-label="Lead status">{% for s in statuses %}<option value="{{ s }}"{% if l.status == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select>
+            <button class="btn btn-small btn-secondary" type="submit">Save</button></form></td>
+        </tr>
+      {% endfor %}</tbody></table></div>
+    {% else %}<p class="empty">No leads{{ ' with this status' if status }} yet.</p>{% endif %}
+  </section>
+</main>
+{% endblock %}

@@ -1,0 +1,9 @@
+{# The free domain health check box, used on the home page and every tool page. #}
+<form class="checkform" method="post" action="{{ url_for('preview.check') }}" data-busy="Checking… (about 10 seconds)">
+  {{ csrf_field() }}<input type="hidden" name="back" value="{{ request.path }}">
+  <label class="sr-only" for="check-domain">Domain to check</label>
+  <input id="check-domain" name="domain" type="text" inputmode="url" spellcheck="false" autocomplete="off" required
+         placeholder="yourbusiness.co.za">
+  <button class="btn btn-lg" type="submit">Check my domain</button>
+</form>
+<p class="fine">Free · no sign-up needed · results in about 10 seconds</p>

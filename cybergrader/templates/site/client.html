@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui with context %}
+{% block title %}{{ client.name }} · Clients · {{ site.business_name }}{% endblock %}
+{% block content %}
+{% set c = client %}
+<main class="wrap page">
+  <p><a href="{{ url_for('clients.index') }}">← Clients</a></p>
+  <h1>{{ client.name }}</h1>
+  <p class="lead">{{ client.domain }} · contact {{ client.contact_email }} · {% include "site/_approval_tag.html" %}</p>
+
+  <div class="grid2">
+    <section class="panel"><h2>Approval</h2>
+      {% if client.approval_status == 'approved' %}
+        <p class="flash flash-ok">Approved by {{ client.approved_by }} on {{ client.approved_at|date }}. You can email them reports and quotes,
+          and their reports say who authorised the checks.</p>
+      {% elif client.approval_status == 'pending' and not pending_expired %}
+        <p class="sub">We emailed {{ client.contact_email }} on {{ client.approval_sent_at|date }}. The link works for 14 days.</p>
+      {% elif client.approval_status in ('declined', 'revoked') %}
+        <p class="flash flash-err">{{ client.contact_email }} {{ client.approval_status }} access. Talk to them before asking again.</p>
+      {% else %}
+        <p class="sub">{{ 'The last request expired.' if pending_expired else 'Not requested yet.' }} Approval lets you email this client
+          reports and quotes, and shows on their reports who authorised the checks.</p>
+      {% endif %}
+      {% if client.approval_status != 'approved' %}
+      <form method="post" action="{{ url_for('clients.request_approval', client_id=client.id) }}">{{ csrf_field() }}
+        <button class="btn btn-secondary" type="submit">{{ 'Send the request again' if client.approval_status != 'none' else 'Request approval' }}</button></form>
+      {% endif %}
+    </section>
+    <section class="panel"><h2>Check {{ client.domain }}</h2>
+      <p class="sub">Uses one credit or plan check. Reports are kept below.</p>
+      <form method="post" action="{{ url_for('site.scan') }}" data-busy="Checking… (about 10 seconds)">{{ csrf_field() }}
+        <input type="hidden" name="domain" value="{{ client.domain }}"><input type="hidden" name="again" value="1">
+        <button class="btn" type="submit">Check now</button></form>
+    </section>
+  </div>
+
+  <section class="panel"><h2>Reports</h2>
+    {% if scans %}<div class="table-wrap"><table>
+      <thead><tr><th>Checked</th><th>Grade</th><th>Score</th><th></th></tr></thead>
+      <tbody>{% for s in scans %}<tr><td>{{ s.created_at|date(true) }}</td><td>{{ ui.grade_chip(s.grade) }}</td><td>{{ s.score }}</td>
+        <td><a href="{{ url_for('site.scan_report', scan_id=s.id) }}">View</a> · <a href="{{ url_for('site.report_pdf_download', scan_id=s.id) }}">PDF</a></td></tr>{% endfor %}</tbody>
+    </table></div>{% else %}<p class="empty">No checks yet.</p>{% endif %}
+  </section>
+
+  <section class="panel" id="send"><h2>Send the report and a quote</h2>
+    {% if client.approval_status != 'approved' %}
+      <p class="sub">Available once {{ client.name }} has approved you, so reports only ever go to clients who agreed to them.</p>
+    {% elif not scans %}
+      <p class="sub">Run a check first.</p>
+    {% else %}
+      <p class="sub">Goes to {{ client.contact_email }} from "{{ branding.name }} via {{ site.business_name }}", with the PDF report
+        under your name attached. Replies go to {{ branding.email }}.
+        {% if not current_user.firm_name %}<a href="{{ url_for('site.account') }}#branding">Set your business details</a> first.{% endif %}</p>
+      <form method="post" action="{{ url_for('clients.send', client_id=client.id) }}" data-busy="Sending…">{{ csrf_field() }}
+        <div class="grid2">
+          <div class="field"><label for="scan_id">Report</label><select id="scan_id" name="scan_id">
+            {% for s in scans %}<option value="{{ s.id }}">{{ s.created_at|date(true) }}: grade {{ s.grade }} ({{ s.score }}/100)</option>{% endfor %}</select></div>
+          {{ ui.field('subject', 'Subject', 'Security check for ' ~ client.domain ~ ': grade ' ~ latest.grade ~ ', ' ~ latest.findings|length ~ (' thing' if latest.findings|length == 1 else ' things') ~ ' to fix', attrs='required maxlength="150"') }}
+        </div>
+        {{ ui.textarea('message', 'Message', default_message, cls='tall', attrs='required') }}
+        <div class="grid2">
+          {{ ui.field('quote_amount', 'Quote amount (R, optional)', placeholder='4500.00', attrs='inputmode="decimal"') }}
+        </div>
+        {{ ui.textarea('quote_text', "What the quote includes (optional)", placeholder='Publish SPF and DMARC records, enable DKIM in Microsoft 365, add security headers on the web server, re-check and confirm.') }}
+        <button class="btn" type="submit">Send to {{ client.contact_email }}</button>
+      </form>
+    {% endif %}
+    {% if messages %}
+    <h3 style="margin:22px 0 6px">Sent</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Sent</th><th>Subject</th><th class="num">Quote</th></tr></thead>
+      <tbody>{% for m in messages %}<tr><td>{{ m.sent_at|date(true) }}</td><td class="wrap-cell">{{ m.subject }}</td>
+        <td class="num">{{ money(m.quote_cents) if m.quote_cents else '' }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+  </section>
+
+  <section class="panel"><h2>Client details</h2>
+    <form method="post" action="{{ url_for('clients.edit', client_id=client.id) }}">{{ csrf_field() }}
+      <div class="grid2">
+        {{ ui.field('name', 'Client company', client.name, attrs='required') }}
+        {{ ui.field('contact_email', 'Contact at ' ~ client.domain, client.contact_email, attrs='required') }}
+      </div>
+      {{ ui.textarea('notes', 'Private notes', client.notes) }}
+      <div class="actions"><button class="btn btn-secondary" type="submit">Save</button></div>
+    </form>
+    <form method="post" action="{{ url_for('clients.delete', client_id=client.id) }}">{{ csrf_field() }}
+      <button class="btn btn-danger btn-small" type="submit">Remove client</button></form>
+  </section>
+</main>
+{% endblock %}

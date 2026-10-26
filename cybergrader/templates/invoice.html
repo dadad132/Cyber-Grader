@@ -1,0 +1,61 @@
+{% extends layout|default("base.html") %}
+{% block title %}{{ data.title }} {{ invoice.number }}{% endblock %}
+{% block content %}
+<div class="wrap toolbar">
+  <a class="btn btn-secondary btn-small" href="{{ back }}">← Back</a>
+  <span class="spacer"></span>
+  <button class="btn btn-small" type="button" data-print>Print / save as PDF</button>
+</div>
+<main class="wrap page">
+<article class="invoice">
+  {% if data.test %}<p class="testmark">Test payment (Yoco test mode). Not a real invoice.</p>{% endif %}
+  <div class="invoice-head">
+    <div>
+      <h1>{{ data.title|upper }}</h1>
+      <p class="muted">No. <strong>{{ invoice.number }}</strong><br>Date {{ invoice.issued_at|date }}</p>
+      <span class="paid">PAID</span>
+    </div>
+    <div style="text-align:right">
+      <strong>{{ data.seller.name }}</strong>{% if data.seller.trading_as %}<br><span class="muted">trading as {{ data.seller.trading_as }}</span>{% endif %}
+    </div>
+  </div>
+  <div class="invoice-parties">
+    <div>
+      <h3>From</h3>
+      <p><strong>{{ data.seller.name }}</strong>
+{% if data.seller.address %}{{ data.seller.address }}
+{% endif %}{% if data.seller.registration_number %}Reg. no. {{ data.seller.registration_number }}
+{% endif %}{% if data.seller.vat_number %}VAT no. {{ data.seller.vat_number }}
+{% endif %}{% if data.seller.email %}{{ data.seller.email }}
+{% endif %}{% if data.seller.phone %}{{ data.seller.phone }}{% endif %}</p>
+    </div>
+    <div>
+      <h3>Bill to</h3>
+      <p><strong>{{ data.buyer.company or data.buyer.name }}</strong>
+{% if data.buyer.company %}Attn: {{ data.buyer.name }}
+{% endif %}{% if data.buyer.address %}{{ data.buyer.address }}
+{% endif %}{% if data.buyer.vat_number %}VAT no. {{ data.buyer.vat_number }}
+{% endif %}{{ data.buyer.email }}</p>
+    </div>
+  </div>
+  <table>
+    <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Amount</th></tr></thead>
+    <tbody>{% for line in data.lines %}
+      <tr><td style="white-space:normal">{{ line.description }}</td><td class="num">{{ line.quantity }}</td><td class="num">{{ money(line.amount_cents) }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  <div class="totals">
+    {% if data.vat_cents %}
+    <div><span>Total excl. VAT</span><span>{{ money(data.excl_cents) }}</span></div>
+    <div><span>VAT ({{ data.vat_rate|num }}%)</span><span>{{ money(data.vat_cents) }}</span></div>
+    {% endif %}
+    <div class="grand"><span>Total{% if data.vat_cents %} incl. VAT{% endif %}</span><span>{{ money(data.total_cents) }}</span></div>
+    <div><span>Paid</span><span>{{ data.paid_at|date }}{% if data.paid_by == 'yoco' %} via Yoco{% endif %}</span></div>
+  </div>
+  <p class="notes">Order reference {{ data.order_ref }}{% if data.payment_ref %} · Payment reference {{ data.payment_ref }}{% endif %}
+{% if data.notes %}
+{{ data.notes }}{% endif %}</p>
+</article>
+</main>
+{% endblock %}
+{% block footer %}{% endblock %}

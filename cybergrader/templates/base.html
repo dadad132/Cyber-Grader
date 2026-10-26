@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en-ZA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ site.business_name }}{% endblock %}</title>
+<meta name="description" content="{% block description %}Free domain health check: test your email security (SPF, DMARC, DKIM), SSL certificate, security headers and DNS in seconds, with a plain-English fix list.{% endblock %}">
+{% if indexable %}<link rel="canonical" href="{{ canonical_url }}">{% else %}<meta name="robots" content="noindex">{% endif %}
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{ site.business_name }}">
+<meta property="og:title" content="{{ self.title() }}">
+<meta property="og:description" content="{{ self.description() }}">
+<meta property="og:url" content="{{ canonical_url }}">
+<meta name="twitter:card" content="summary">
+{% if site.google_site_verification %}<meta name="google-site-verification" content="{{ site.google_site_verification }}">{% endif %}
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2 4 6v9c0 7.5 5.1 13.4 12 15 6.9-1.6 12-7.5 12-15V6z' fill='%231f5bd6'/%3E%3Cpath d='m10 16 4 4 8-8' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+{% block structured_data %}{% endblock %}
+{% block head_extra %}{% endblock %}
+<style>{{ base_css|safe }}{% include "_app.css" %}</style>
+</head>
+<body>
+<header class="topbar"><div class="wrap topbar-inner">
+{% block topbar %}
+  <a class="brand" href="{{ url_for('site.landing') }}">{{ site.business_name }}</a>
+  <nav class="topnav" aria-label="Main">
+  {% if current_user %}
+    <a href="{{ url_for('site.dashboard') }}"{% if active == 'dashboard' %} aria-current="page"{% endif %}>Dashboard</a>
+    <a href="{{ url_for('clients.index') }}"{% if active == 'clients' %} aria-current="page"{% endif %}>Clients</a>
+    <a href="{{ url_for('site.buy') }}"{% if active == 'buy' %} aria-current="page"{% endif %}>Buy checks</a>
+    <a href="{{ url_for('site.invoices') }}"{% if active == 'invoices' %} aria-current="page"{% endif %}>Invoices</a>
+    <a href="{{ url_for('site.account') }}"{% if active == 'account' %} aria-current="page"{% endif %}>Account</a>
+    {% if site.charge_for_checks %}<span class="balance" title="Credits left">{{ current_user.credits }} credit{{ '' if current_user.credits == 1 else 's' }}</span>
+    {% else %}<span class="balance" title="Checks don't use credits at the moment">Free checks</span>{% endif %}
+    <form method="post" action="{{ url_for('site.logout') }}">{{ csrf_field() }}<button type="submit">Log out</button></form>
+  {% else %}
+    <a href="{{ url_for('site.landing') }}#check">Free check</a>
+    <a href="{{ url_for('site.landing') }}#how">How it works</a>
+    <a href="{{ url_for('site.pricing') }}"{% if active == 'pricing' %} aria-current="page"{% endif %}>Pricing</a>
+    <a href="{{ url_for('site.login') }}">Log in</a>
+    <a class="btn btn-small" href="{{ url_for('site.signup') }}">Sign up free</a>
+  {% endif %}
+  </nav>
+{% endblock %}
+</div></header>
+{% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}
+<div class="wrap flashes">{% for category, message in messages %}<p class="flash flash-{{ category }}" role="status">{{ message }}</p>{% endfor %}</div>
+{% endif %}{% endwith %}
+{% block content %}{% endblock %}
+{% block footer %}
+<footer class="sitefoot"><div class="wrap cols">
+  <div>
+    <p><strong>{{ site.business_name }}</strong>{% if site.legal_name and site.legal_name != site.business_name %} · {{ site.legal_name }}{% endif %}</p>
+    {% if site.contact_email %}<p><a href="mailto:{{ site.contact_email }}">{{ site.contact_email }}</a>{% if site.contact_phone %} · {{ site.contact_phone }}{% endif %}</p>{% endif %}
+    {% if site.vat_registered and site.vat_number %}<p>VAT no. {{ site.vat_number }}</p>{% endif %}
+  </div>
+  <nav aria-label="Free tools">
+    <p><strong>Free tools</strong></p>
+    <p>{% for endpoint, label in tool_pages %}<a href="{{ url_for(endpoint) }}">{{ label }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+  </nav>
+  <div>
+    <p><a href="{{ url_for('site.landing') }}">Domain health check</a> · <a href="{{ url_for('site.pricing') }}">Pricing</a> · <a href="{{ url_for('site.terms') }}">Terms</a> · <a href="{{ url_for('site.privacy') }}">Privacy</a></p>
+    <p>Payments are processed securely by Yoco.</p>
+  </div>
+</div></footer>
+{% endblock %}
+<script>{{ page_script|safe }}</script>
+</body>
+</html>

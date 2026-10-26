@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui with context %}
+{% block title %}Clients · {{ site.business_name }}{% endblock %}
+{% block content %}
+<main class="wrap page">
+  <h1>Clients</h1>
+  <p class="lead">For IT providers: keep your clients' domains in one place, get each client's approval by email, and send them
+    reports and quotes under your own name. Set your business details under <a href="{{ url_for('site.account') }}#branding">Account</a>.</p>
+
+  <section class="panel">
+    {% if clients %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>Client</th><th>Approval</th><th>Latest grade</th><th>Checked</th><th></th></tr></thead>
+      <tbody>{% for c in clients %}
+        <tr><td><a href="{{ url_for('clients.detail', client_id=c.id) }}"><strong>{{ c.name }}</strong></a><br><small>{{ c.domain }}</small></td>
+          <td>{% include "site/_approval_tag.html" %}</td>
+          <td>{% if c.grade %}{{ ui.grade_chip(c.grade) }} {{ c.score }}/100{% else %}<span class="empty">not checked</span>{% endif %}</td>
+          <td>{{ c.checked_at|date if c.checked_at else '' }}</td>
+          <td><form method="post" action="{{ url_for('site.scan') }}" data-busy="Checking…">{{ csrf_field() }}
+            <input type="hidden" name="domain" value="{{ c.domain }}"><input type="hidden" name="again" value="1">
+            <button class="btn btn-small btn-secondary" type="submit">Check now</button></form></td></tr>
+      {% endfor %}</tbody></table></div>
+    {% else %}<p class="empty">No clients yet. Add your first one below.</p>{% endif %}
+  </section>
+
+  <section class="panel">
+    <h2>Add a client</h2>
+    <p class="sub">The approval email goes to an address at the client's own domain, which proves they control it.</p>
+    <form method="post" action="{{ url_for('clients.add') }}">{{ csrf_field() }}
+      <div class="grid3">
+        {{ ui.field('name', 'Client company', placeholder='Company A (Pty) Ltd', attrs='required') }}
+        {{ ui.field('domain', 'Domain', placeholder='companya.co.za', attrs='required inputmode="url"') }}
+        {{ ui.field('contact_email', 'Contact at that domain', placeholder='it@companya.co.za', attrs='required') }}
+      </div>
+      {{ ui.checkbox('request_approval', 'Email them an approval request now', true,
+                     'They click a link to approve (or decline). Until then you can still run normal paid checks.') }}
+      <button class="btn" type="submit">Add client</button>
+    </form>
+  </section>
+</main>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ report.display_domain }}: grade {{ report.grade }} · {{ site.business_name }}{% endblock %}
+{% block content %}
+<div class="wrap toolbar">
+  <a class="btn btn-secondary btn-small" href="{{ url_for('site.dashboard') }}">← Dashboard</a>
+  <span class="spacer"></span>
+  <form method="post" action="{{ url_for('site.scan') }}" data-busy="Checking…">{{ csrf_field() }}
+    <input type="hidden" name="domain" value="{{ report.domain }}"><input type="hidden" name="again" value="1">
+    <button class="btn btn-small" type="submit">Check again (1 check)</button></form>
+  <a class="btn btn-secondary btn-small" href="{{ url_for('site.report_pdf_download', scan_id=scan.id) }}">Download PDF</a>
+  <a class="btn btn-secondary btn-small" href="{{ url_for('site.download_report', scan_id=scan.id) }}">HTML</a>
+  <button class="btn btn-secondary btn-small" type="button" data-print>Print</button>
+</div>
+{% if client %}<div class="wrap"><p class="flash {{ 'flash-ok' if client.approval_status == 'approved' else 'flash-info' }}">
+  Client: <strong>{{ client.name }}</strong> ·
+  {% if client.approval_status == 'approved' %}checks authorised by {{ client.approved_by }} on {{ client.approved_at|date }}{% else %}not approved by the client yet{% endif %}
+  · <a href="{{ url_for('clients.detail', client_id=client.id) }}#send">Send to client</a></p></div>{% endif %}
+{{ body }}
+{% if not client %}<div class="wrap">{% with action=url_for('site.request_fix', scan_id=scan.id), anonymous=false %}{% include "_fix_cta.html" %}{% endwith %}</div>{% endif %}
+{% endblock %}

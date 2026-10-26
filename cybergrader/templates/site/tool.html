@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ page.title }} | {{ site.business_name }}{% endblock %}
+{% block description %}{{ page.description }}{% endblock %}
+{% block structured_data %}{{ jsonld(faq_schema(page.faqs), {"@type": "BreadcrumbList", "itemListElement": [
+  {"@type": "ListItem", "position": 1, "name": "Domain health check", "item": seo_base ~ "/"},
+  {"@type": "ListItem", "position": 2, "name": page.h1, "item": canonical_url}]}) }}{% endblock %}
+{% block content %}
+<main class="wrap page tool">
+  <nav class="crumbs" aria-label="Breadcrumb"><a href="{{ url_for('site.landing') }}">Domain health check</a> › {{ page.h1 }}</nav>
+  <h1>{{ page.h1 }}</h1>
+  <p class="lead">{{ page.lede }}</p>
+  <section class="panel" id="check">
+    <h2>Free {{ page.phrase }}</h2>
+    <p class="sub">Enter a domain. One check covers email security, SSL, security headers and DNS; you'll see the {{ page.phrase }} results alongside the rest.</p>
+    {% include "_check_form.html" %}
+  </section>
+  {% for heading, text in page.sections %}
+  <section class="prose"><h2>{{ heading }}</h2><p>{{ text }}</p></section>
+  {% endfor %}
+  <section class="faq prose"><h2>Questions</h2>
+    {% for question, answer in page.faqs %}<details><summary>{{ question }}</summary><p>{{ answer }}</p></details>{% endfor %}
+  </section>
+  <section class="prose"><h2>More free checks</h2>
+    <p class="toollinks"><a href="{{ url_for('site.landing') }}">Full domain health check</a>{% for endpoint, label in tool_pages %}{% if endpoint != 'seo.tool_' ~ slug.replace('-', '_') %} · <a href="{{ url_for(endpoint) }}">{{ label }}</a>{% endif %}{% endfor %}</p>
+  </section>
+</main>
+{% endblock %}

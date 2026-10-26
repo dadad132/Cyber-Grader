@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui with context %}
+{% block title %}Invoices · {{ site.business_name }}{% endblock %}
+{% block content %}
+<main class="wrap page">
+  <h1>Invoices</h1>
+  <p class="lead">Every payment gets {{ 'a tax invoice' if site.vat_registered else 'an invoice' }}. Open one to print it or save it as a PDF.
+    Add your company name, VAT number and address under <a href="{{ url_for('site.account') }}">Account</a> to have them shown on future invoices.</p>
+  <section class="panel">
+    {% if invoices %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>Invoice</th><th>Date</th><th class="num">Amount</th><th></th></tr></thead>
+      <tbody>{% for inv in invoices %}
+        <tr><td><a href="{{ url_for('site.invoice', number=inv.number) }}">{{ inv.number }}</a></td><td>{{ inv.issued_at|date }}</td>
+          <td class="num">{{ money(inv.total_cents) }}</td><td><a href="{{ url_for('site.invoice', number=inv.number) }}">View</a></td></tr>
+      {% endfor %}</tbody></table></div>
+    {% else %}<p class="empty">No invoices yet. They appear here as soon as a payment goes through.</p>{% endif %}
+  </section>
+  {% if orders %}
+  <section class="panel">
+    <h2>Unfinished payments</h2>
+    <p class="sub">Payments that were cancelled, declined or are still waiting for Yoco's confirmation.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Reference</th><th>Item</th><th>Started</th><th class="num">Amount</th><th>Status</th></tr></thead>
+      <tbody>{% for order in orders %}
+        <tr><td><a href="{{ url_for('site.payment', ref=order.ref) }}"><code>{{ order.ref }}</code></a></td><td class="wrap-cell">{{ order.description }}</td>
+          <td>{{ order.created_at|date(true) }}</td><td class="num">{{ money(order.amount_cents) }}</td><td>{{ ui.status_tag(order.status) }}</td></tr>
+      {% endfor %}</tbody></table></div>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

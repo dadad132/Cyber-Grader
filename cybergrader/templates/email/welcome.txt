@@ -1,0 +1,11 @@
+Hi {{ user.name }},
+
+Welcome to {{ settings.business_name }}. Your account is ready{% if settings.signup_credits %}, with {{ settings.signup_credits }} free check{{ '' if settings.signup_credits == 1 else 's' }} to start with{% endif %}.
+
+Run your first check here:
+{{ link }}
+
+Each check grades a domain's email spoofing protection, HTTPS, security headers and DNS, and gives you a plain-English list of fixes.
+
+{{ settings.business_name }}{% if settings.contact_email %}
+{{ settings.contact_email }}{% endif %}

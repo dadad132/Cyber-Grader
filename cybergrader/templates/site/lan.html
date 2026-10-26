@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Building network audit: {{ audit.site_name or audit.domain or 'network' }} · {{ site.business_name }}{% endblock %}
+{% block content %}
+<div class="wrap toolbar">
+  <a class="btn btn-secondary btn-small" href="{{ url_for('site.dashboard') }}">← Dashboard</a>
+  <span class="spacer"></span>
+  <button class="btn btn-secondary btn-small" type="button" data-print>Print / PDF</button>
+</div>
+<main class="wrap">
+  <section class="hero">
+    <div class="grade tone-{{ audit.grade|tone }}" role="img" aria-label="Grade {{ audit.grade }}">{{ audit.grade }}</div>
+    <div>
+      <p class="eyebrow">Building network audit</p>
+      <h1>{{ audit.site_name or audit.domain or 'Network audit' }}</h1>
+      <p class="meta">Score {{ audit.score }}/100 · {{ row.created_at|date(true) }}{% if audit.gateway_ip %} · gateway {{ audit.gateway_ip }}{% endif %}{% if audit.public_ip %} · internet-facing IP {{ audit.public_ip }}{% endif %}{% if audit.ssid %} · Wi-Fi "{{ audit.ssid }}"{% endif %}{% if audit.hosts_scanned %} · {{ audit.hosts_scanned }} addresses checked{% endif %}</p>
+      {% if audit.not_checked %}<p class="cap">Not checked (left out of the score): {{ audit.not_checked|join(', ') }}.</p>{% endif %}
+    </div>
+  </section>
+  <section><h2>What to fix <span class="count">{{ audit.findings|length }}</span></h2>
+  {% for f in audit.findings %}
+    <article class="finding sev-{{ f.severity }}"><div class="finding-head"><span class="pill">{{ f.severity }}</span><h3>{{ f.title }}</h3></div>
+      <p>{{ f.issue }}</p><div class="fix"><span class="fix-label">How to fix</span><p>{{ f.fix }}</p></div></article>
+  {% else %}<p class="meta">Nothing to fix in what was measured.</p>{% endfor %}
+  </section>
+  {% if audit.passed %}<section><h2>Passing <span class="count">{{ audit.passed|length }}</span></h2>
+    <ul class="checklist">{% for p in audit.passed %}<li><span class="icon icon-ok" aria-hidden="true">✓</span><div class="item"><p>{{ p }}</p></div></li>{% endfor %}</ul></section>{% endif %}
+  {% with action=url_for('site.lan_help', audit_id=row.id), anonymous=false, tier={'name': 'network fixes', 'price_cents': site.dfy_moderate_cents} %}{% include "_fix_cta.html" %}{% endwith %}
+  <p class="meta" style="margin:24px 0 40px">This audit reflects what the on-site agent could reach from the device it ran on, at that moment. Only measured items are scored.</p>
+</main>
+{% endblock %}

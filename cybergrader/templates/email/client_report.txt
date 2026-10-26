@@ -1,0 +1,21 @@
+{{ message }}
+
+----------------------------------------------------------------
+Security check for {{ report.display_domain }}, {{ report.scanned_at.strftime('%d %b %Y') }}
+Grade {{ report.grade }} · score {{ report.score }}/100 · {{ report.findings|length }} thing{{ '' if report.findings|length == 1 else 's' }} to fix
+{% for r in report.findings[:8] %}- [{{ r.severity.value|upper }}] {{ r.title }}: {{ r.summary }}
+{% endfor %}{% if report.findings|length > 8 %}- ...and {{ report.findings|length - 8 }} more in the attached PDF.
+{% endif %}{% if quote %}
+Quote to fix these issues: {{ quote }}
+{% if quote_text %}{{ quote_text }}
+{% endif %}Reply to this email to go ahead.
+{% endif %}----------------------------------------------------------------
+
+{{ branding.name }}{% if branding.email %}
+{{ branding.email }}{% endif %}{% if branding.phone %}
+{{ branding.phone }}{% endif %}{% if branding.url %}
+{{ branding.url }}{% endif %}
+
+The full report is attached as a PDF. {{ client.approved_by }} authorised {{ branding.name }} to run these checks for
+{{ client.domain }}; you can withdraw that at any time with the link in the original approval email.
+Powered by {{ settings.business_name }}.

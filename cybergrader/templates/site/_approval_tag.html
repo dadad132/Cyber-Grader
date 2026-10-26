@@ -1,0 +1,6 @@
+{# Approval badge for a client row `c`. #}
+{% if c.approval_status == 'approved' %}<span class="tag tag-ok">approved</span>
+{% elif c.approval_status == 'pending' %}<span class="tag tag-warn">waiting</span>
+{% elif c.approval_status == 'declined' %}<span class="tag tag-err">declined</span>
+{% elif c.approval_status == 'revoked' %}<span class="tag tag-err">revoked</span>
+{% else %}<span class="tag">not requested</span>{% endif %}

@@ -1,0 +1,30 @@
+{% extends "admin/base.html" %}
+{% import "macros.html" as ui with context %}
+{% block admin_title %}{{ 'Create admin password' if mode == 'setup' else 'Sign in' }}{% endblock %}
+{% block content %}
+<main class="wrap"><div class="auth panel">
+{% if mode == 'remote-setup' %}
+  <h1>Set the admin password on the server</h1>
+  <p class="sub">For safety, the first super-admin password can't be created from a browser. On the server, run:</p>
+  <p><code>sudo cybergrader-manage set-admin-password</code></p>
+  <p class="sub">The AlmaLinux installer does this for you and installs the <code>cybergrader-manage</code> command. Then reload this page.</p>
+{% elif mode == 'setup' %}
+  <h1>Create your admin password</h1>
+  <p class="sub">This protects the super-admin portal. It's stored as a salted hash in <code>{{ path }}</code>.</p>
+  {% if error %}<p class="flash flash-err" role="alert">{{ error }}</p>{% endif %}
+  <form method="post">{{ csrf_field() }}
+    {{ ui.field('password', 'Password', type='password', help='At least 10 characters.', attrs='autocomplete="new-password" required') }}
+    {{ ui.field('confirm', 'Confirm password', type='password', attrs='autocomplete="new-password" required') }}
+    <button class="btn btn-block" type="submit">Create password</button>
+  </form>
+{% else %}
+  <h1>Super-admin sign-in</h1>
+  <p class="sub">Enter the admin password.</p>
+  {% if error %}<p class="flash flash-err" role="alert">{{ error }}</p>{% endif %}
+  <form method="post">{{ csrf_field() }}
+    {{ ui.field('password', 'Password', type='password', attrs='autocomplete="current-password" required autofocus') }}
+    <button class="btn btn-block" type="submit">Sign in</button>
+  </form>
+{% endif %}
+</div></main>
+{% endblock %}

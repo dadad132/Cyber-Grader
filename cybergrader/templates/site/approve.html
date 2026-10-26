@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Approve security checks · {{ site.business_name }}{% endblock %}
+{% block content %}
+<main class="wrap"><div class="auth panel">
+{% if client is none %}
+  <h1>Link not found</h1>
+  <p class="sub">This approval link isn't valid. Ask the IT provider who sent it to send a new one.</p>
+{% else %}
+  <span class="eyebrow">{{ client.domain }}</span>
+  {% if client.approval_status == 'approved' %}
+    <h1>{{ firm }} is approved</h1>
+    <p class="sub">{{ firm }} can run security checks for <strong>{{ client.domain }}</strong> and email reports and quotes to
+      {{ client.contact_email }}. Approved by {{ client.approved_by }} on {{ client.approved_at|date }}.</p>
+    <p class="sub">Changed your mind? You can withdraw access at any time.</p>
+    <form method="post">{{ csrf_field() }}<input type="hidden" name="action" value="revoke">
+      <button class="btn btn-danger" type="submit">Withdraw access</button></form>
+  {% elif expired %}
+    <h1>This request has expired</h1>
+    <p class="sub">Ask {{ firm }} to send a new approval request.</p>
+  {% else %}
+    <h1>Allow {{ firm }} to manage security checks for {{ client.domain }}?</h1>
+    <p class="sub">{{ firm }}{% if client.firm_email %} ({{ client.firm_email }}){% endif %} looks after IT for
+      {{ client.name }} and uses {{ site.business_name }} to check the domain's email security, website certificate,
+      security headers and DNS. If you approve, they can:</p>
+    <ul class="sub">
+      <li>run checks on {{ client.domain }} (read-only: nothing on your systems changes), and</li>
+      <li>email reports and quotes to {{ client.contact_email }}.</li>
+    </ul>
+    {% if client.approval_status in ('declined', 'revoked') %}<p class="flash flash-info">You previously {{ client.approval_status }} access.</p>{% endif %}
+    <div class="actions">
+      <form method="post">{{ csrf_field() }}<input type="hidden" name="action" value="approve">
+        <button class="btn" type="submit">Approve</button></form>
+      {% if client.approval_status == 'pending' %}
+      <form method="post">{{ csrf_field() }}<input type="hidden" name="action" value="decline">
+        <button class="btn btn-secondary" type="submit">Decline</button></form>
+      {% endif %}
+    </div>
+    <p class="sub">Not expecting this? Click Decline, or simply ignore this page.</p>
+  {% endif %}
+{% endif %}
+</div></main>
+{% endblock %}

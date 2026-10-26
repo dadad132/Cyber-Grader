@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% set waiting = order.status == 'pending' and result not in ('cancelled', 'failed') %}
+{% block head_extra %}{% if waiting %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
+{% block title %}Payment · {{ site.business_name }}{% endblock %}
+{% block content %}
+<main class="wrap"><div class="auth panel">
+  {% if order.status == 'paid' %}
+    <h1>Payment received</h1>
+    <p class="sub">Thank you! {{ order.description }}.</p>
+    <p class="flash flash-ok">{% if order.product_kind == 'credits' %}{{ order.credits }} credit{{ '' if order.credits == 1 else 's' }} added. You now have {{ current_user.credits }}.{% else %}Your {{ plan.name }} plan is active until {{ plan.expires_at|date }}.{% endif %}</p>
+    <div class="actions">
+      <a class="btn" href="{{ url_for('site.dashboard') }}">Check a domain</a>
+      {% if invoice %}<a class="btn btn-secondary" href="{{ url_for('site.invoice', number=invoice.number) }}">View invoice {{ invoice.number }}</a>{% endif %}
+    </div>
+  {% elif result == 'cancelled' %}
+    <h1>Payment cancelled</h1>
+    <p class="sub">No money was taken. You can choose something else or try again.</p>
+    <a class="btn" href="{{ url_for('site.buy') }}">Back to buying checks</a>
+  {% elif result == 'failed' or order.status == 'failed' %}
+    <h1>Payment didn't go through</h1>
+    <p class="sub">Your bank or Yoco declined the payment, so nothing was charged. Please try again or use a different card.</p>
+    <a class="btn" href="{{ url_for('site.buy') }}">Try again</a>
+  {% else %}
+    <h1>Confirming your payment…</h1>
+    <p class="sub">We're waiting for Yoco to confirm the payment. This usually takes a few seconds; this page refreshes by itself.</p>
+    <p class="sub">If it takes more than a few minutes, contact us{% if site.contact_email %} at <a href="mailto:{{ site.contact_email }}">{{ site.contact_email }}</a>{% endif %} and quote reference <code>{{ order.ref }}</code>.</p>
+  {% endif %}
+</div></main>
+{% endblock %}

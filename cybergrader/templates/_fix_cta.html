@@ -1,0 +1,20 @@
+{# "Have us fix it" quote request. Needs: action (form URL), tier, and anonymous (ask for name and email). #}
+{% import "macros.html" as ui with context %}
+{% if site.dfy_enabled %}
+<section class="panel fixcta" id="help">
+  <span class="eyebrow">Done for you</span>
+  <h2>Want us to fix it for you?</h2>
+  <p class="sub">{{ site.business_name }} can sort out these issues for you: DNS and email records, certificates, server settings
+    and network security. For a report like this ({{ tier.name|lower }}) it typically costs from <strong>{{ fix_price(tier) }}</strong>;
+    we'll confirm a fixed quote before starting.</p>
+  <form method="post" action="{{ action }}">{{ csrf_field() }}
+    {% if anonymous %}<div class="grid2">
+      {{ ui.field('name', 'Your name', attrs='required autocomplete="name"') }}
+      {{ ui.field('email', 'Email', type='email', attrs='required autocomplete="email"') }}
+    </div>{% endif %}
+    <div class="grid2">{{ ui.field('phone', 'Phone (optional)', type='tel', attrs='autocomplete="tel"') }}</div>
+    {{ ui.textarea('message', 'Anything we should know? (optional)', placeholder='e.g. we use Microsoft 365 and our website runs on WordPress') }}
+    <button class="btn" type="submit">Request a quote</button>
+  </form>
+</section>
+{% endif %}

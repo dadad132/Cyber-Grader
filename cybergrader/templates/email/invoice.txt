@@ -1,0 +1,12 @@
+Hi {{ name }},
+
+Thank you for your payment. Your {{ data.title|lower }} {{ number }} for {{ money(data.total_cents) }} is ready:
+{{ link }}
+
+{% for line in data.lines %}- {{ line.description }}: {{ money(line.amount_cents) }}
+{% endfor %}{% if data.vat_cents %}Includes VAT of {{ money(data.vat_cents) }}.
+{% endif %}
+Open the link to view, print or save the invoice as a PDF. All your invoices are also under Invoices in your account.
+
+{{ settings.business_name }}{% if settings.contact_email %}
+{{ settings.contact_email }}{% endif %}

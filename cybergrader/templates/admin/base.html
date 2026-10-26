@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{% block admin_title %}Admin{% endblock %} · Super admin{% endblock %}
+{% block topbar %}
+  <a class="brand" href="{{ url_for('admin.dashboard') }}">{{ site.business_name }} <span class="tag tag-info">Super admin</span></a>
+  {% if session.get('admin') %}
+  <nav class="topnav" aria-label="Admin">
+    <a href="{{ url_for('admin.dashboard') }}"{% if active == 'dashboard' %} aria-current="page"{% endif %}>Dashboard</a>
+    <a href="{{ url_for('admin.users') }}"{% if active == 'users' %} aria-current="page"{% endif %}>Users</a>
+    <a href="{{ url_for('admin.leads') }}"{% if active == 'leads' %} aria-current="page"{% endif %}>Leads</a>
+    <a href="{{ url_for('admin.payments') }}"{% if active == 'payments' %} aria-current="page"{% endif %}>Payments</a>
+    <a href="{{ url_for('admin.settings_home') }}"{% if active == 'settings' %} aria-current="page"{% endif %}>Settings</a>
+    <a href="{{ url_for('site.landing') }}" target="_blank" rel="noopener">Website ↗</a>
+    <form method="post" action="{{ url_for('admin.logout') }}">{{ csrf_field() }}<button type="submit">Log out</button></form>
+  </nav>
+  {% endif %}
+{% endblock %}
+{% block footer %}{% endblock %}

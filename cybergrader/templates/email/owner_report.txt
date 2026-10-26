@@ -1,0 +1,14 @@
+Hello,
+
+Here's the domain health report for {{ report.display_domain }}: grade {{ report.grade }}, score {{ report.score }}/100,
+with {{ report.findings|length }} thing{{ '' if report.findings|length == 1 else 's' }} to fix. The PDF is attached, and the full report is here:
+{{ link }}
+{% if report.findings %}
+Most important:
+{% for r in report.findings[:5] %}- [{{ r.severity.value|upper }}] {{ r.title }}: {{ r.summary }}
+{% endfor %}{% endif %}
+Want us to fix it for you? Reply to this email or use "Request a quote" on the report page.
+
+{{ settings.business_name }}{% if settings.contact_email %}
+{{ settings.contact_email }}{% endif %}{% if settings.contact_phone %}
+{{ settings.contact_phone }}{% endif %}

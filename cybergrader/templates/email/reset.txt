@@ -1,0 +1,10 @@
+Hi {{ user.name }},
+
+Someone (hopefully you) asked to reset the password for your {{ settings.business_name }} account.
+
+Choose a new password here (the link works for one hour):
+{{ link }}
+
+If you didn't ask for this, you can ignore this email; your password won't change.
+
+{{ settings.business_name }}

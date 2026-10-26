@@ -1,0 +1,32 @@
+{% extends "admin/base.html" %}
+{% import "macros.html" as ui with context %}
+{% block admin_title %}Payments{% endblock %}
+{% block content %}
+<main class="wrap page">
+  <h1>Payments</h1>
+  <p class="lead">Orders are marked paid automatically when Yoco confirms the payment. If a payment shows as paid in the Yoco app
+    but is still pending here, use <em>Mark paid</em>; it delivers the credits or plan and issues the invoice.</p>
+  <p class="actions">
+    {% for key, label in (('', 'All'), ('paid', 'Paid'), ('pending', 'Pending'), ('failed', 'Failed')) %}
+      <a class="btn btn-small {{ '' if status == key else 'btn-secondary' }}" href="{{ url_for('admin.payments', status=key or None) }}">{{ label }}</a>
+    {% endfor %}
+  </p>
+  <section class="panel">
+    {% if orders %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>Started</th><th>Customer</th><th>Item</th><th class="num">Amount</th><th>Status</th><th>Invoice / action</th></tr></thead>
+      <tbody>{% for o in orders %}
+        <tr><td>{{ o.created_at|date(true) }}<br><small><code>{{ o.ref }}</code></small></td>
+          <td><a href="{{ url_for('admin.user_detail', user_id=o.user_id) }}">{{ o.email }}</a></td>
+          <td class="wrap-cell">{{ o.description }}{% if o.mode == 'test' %} <span class="tag">test</span>{% endif %}</td>
+          <td class="num">{{ money(o.amount_cents) }}</td>
+          <td>{{ ui.status_tag(o.status) }}{% if o.paid_by == 'admin' %}<br><small>by admin</small>{% endif %}</td>
+          <td>{% if o.invoice %}<a href="{{ url_for('admin.invoice', number=o.invoice) }}">{{ o.invoice }}</a>
+            {% else %}<form method="post" action="{{ url_for('admin.mark_paid', order_id=o.id) }}" class="scanbox">{{ csrf_field() }}
+              <input name="reference" placeholder="Yoco payment ref (optional)" aria-label="Payment reference" style="min-width:160px;padding:7px 10px;font-size:13px">
+              <button class="btn btn-small btn-secondary" type="submit">Mark paid</button></form>{% endif %}</td></tr>
+      {% endfor %}</tbody></table></div>
+    {% else %}<p class="empty">No payments{{ ' with this status' if status }}.</p>{% endif %}
+  </section>
+</main>
+{% endblock %}

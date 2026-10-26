@@ -1,0 +1,13 @@
+New {{ {'report': 'fix request from a customer report', 'preview': 'fix request from a free check', 'owner': 'verified domain owner', 'lan': 'network fix request from a building audit'}.get(source, source) }}
+
+Domain:  {{ domain }}{% if grade %}
+Grade:   {{ grade }}{% if score is not none %} ({{ score }}/100){% endif %}{% endif %}{% if tier %}
+Tier:    {{ tier }}{% endif %}
+Name:    {{ name }}
+Email:   {{ email }}{% if phone %}
+Phone:   {{ phone }}{% endif %}
+{% if message %}
+Message:
+{{ message }}
+{% endif %}
+See all leads in the super admin under Leads.

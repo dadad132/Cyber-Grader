@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui with context %}
+{% block title %}Free Domain Health Check: SPF, DMARC, SSL & DNS | {{ site.business_name }}{% endblock %}
+{% block description %}Free domain health check for your business: test email security (SPF, DMARC, DKIM), your SSL certificate, security headers and DNS in 10 seconds, with plain-English fixes.{% endblock %}
+{% block structured_data %}{{ jsonld(*landing_schema(site, seo_base)) }}{% endblock %}
+{% block content %}
+<main>
+<section class="wrap hero-site" id="check">
+  <div>
+    <span class="eyebrow">Domain health check</span>
+    <h1>Free domain health check for your business</h1>
+    <p class="lead">Can someone send email pretending to be you? Is your SSL certificate about to expire? Enter your domain to grade its
+      email security (SPF, DMARC, DKIM), SSL/TLS, security headers and DNS from A+ to F, with a plain-English fix list.</p>
+    {% include "_check_form.html" %}
+  </div>
+  <div class="sample" aria-label="Example result">
+    <div class="sample-top"><div class="sample-grade tone-d">D</div>
+      <div><strong>yourbusiness.co.za</strong><span>Score 60/100 · 9 things to fix</span></div></div>
+    <div class="sample-row"><span>Email security</span><div class="bar"><span class="tone-f" style="width:49%"></span></div><b>49%</b></div>
+    <div class="sample-row"><span>HTTPS &amp; TLS</span><div class="bar"><span class="tone-a" style="width:100%"></span></div><b>100%</b></div>
+    <div class="sample-row"><span>Security headers</span><div class="bar"><span class="tone-f" style="width:59%"></span></div><b>59%</b></div>
+    <div class="sample-row"><span>Domain &amp; DNS</span><div class="bar"><span class="tone-f" style="width:8%"></span></div><b>0%</b></div>
+    <div class="sample-issue"><b>HIGH</b> · DMARC is in monitoring-only mode, so spoofed email is still delivered. <u>How to fix →</u></div>
+  </div>
+</section>
+
+<section class="section wrap" id="what">
+  <div class="section-head"><h2>What the domain health check covers</h2>
+    <p>21 checks across the four areas attackers look at first. Every problem comes with a severity and a step-by-step fix your IT person or web host can follow.</p></div>
+  <div class="cards">
+    <a class="card" href="{{ url_for('seo.tool_email_security_check') }}"><h3>Email security</h3><p>SPF, DMARC, DKIM, MTA-STS and TLS reporting decide whether criminals can send invoices "from" you, the scam behind most business email fraud.</p></a>
+    <a class="card" href="{{ url_for('seo.tool_ssl_check') }}"><h3>SSL certificate &amp; TLS</h3><p>Is the certificate trusted and renewing on time? Are old, broken TLS versions switched off? Does every visitor land on HTTPS?</p></a>
+    <a class="card" href="{{ url_for('seo.tool_security_headers_check') }}"><h3>Security headers</h3><p>HSTS, Content-Security-Policy, clickjacking and cookie protection: the browser-side defences that stop script injection and session theft.</p></a>
+    <a class="card" href="{{ url_for('seo.tool_dns_security_check') }}"><h3>DNS security</h3><p>DNSSEC and CAA protect against forged DNS answers and rogue certificates, plus a published contact for security researchers.</p></a>
+  </div>
+</section>
+
+<section class="section wrap" id="how">
+  <div class="section-head"><h2>How it works</h2><p>No software to install and nothing to change on your systems.</p></div>
+  <div class="steps">
+    <div class="card"><h3>Check any domain free</h3><p>Enter your domain, a client's or a supplier's. We read only public information, the same things any browser or mail server sees, and give you a grade in about ten seconds.</p></div>
+    <div class="card"><h3>Unlock the full report</h3><p>See exactly what's wrong and how to fix it: verify you own the domain with a code sent to your work email, or use a credit{% if site.signup_credits %} (new accounts get {{ site.signup_credits }} free){% endif %}.</p></div>
+    <div class="card"><h3>Fix it, or have us fix it</h3><p>Hand the PDF to your IT person or web host, or request a quote and {{ site.business_name }} will sort it out. Re-check afterwards to prove the improvement.</p></div>
+  </div>
+</section>
+
+<section class="section wrap" id="who">
+  <div class="section-head"><h2>Who it's for</h2><p>Anyone responsible for a business domain who wants a quick, honest answer without hiring a penetration tester.</p></div>
+  <div class="cards">
+    <div class="card"><h3>Small &amp; medium businesses</h3><p>Find out whether your domain can be used to defraud your own customers, and get a fix list to hand to your IT provider or web host.</p></div>
+    <div class="card"><h3>IT providers &amp; MSPs</h3><p>Keep a client list, get each client's approval by email, and send them reports and quotes under your own name. Audit on-site networks with the building agent.</p></div>
+    <div class="card"><h3>Web developers &amp; agencies</h3><p>Hand over websites with HTTPS, headers and email authentication sorted, and catch problems before your client does.</p></div>
+    <div class="card"><h3>Finance &amp; compliance teams</h3><p>Quick evidence for supplier due diligence, cyber-insurance questionnaires and your POPIA security safeguards.</p></div>
+  </div>
+</section>
+
+<section class="section wrap" id="pricing">
+  <div class="section-head"><h2>Simple pricing</h2><p>The summary is always free. One credit unlocks one full report for one domain. Buy credits as you need them, or take a monthly plan if you check domains regularly.</p></div>
+  {{ ui.price_cards(products, current_user is not none, site.payments_ready) }}
+</section>
+
+<section class="section wrap faq" id="faq">
+  <div class="section-head"><h2>Domain health check questions</h2></div>
+  {% for question, answer in landing_faqs(site) %}<details><summary>{{ question }}</summary><p>{{ answer }}</p></details>{% endfor %}
+</section>
+
+<section class="wrap"><div class="cta-band">
+  <h2>See how healthy your domain is</h2>
+  <p>It takes about ten seconds and it's free.</p>
+  <a class="btn btn-lg" href="#check">Check my domain</a>
+</div></section>
+</main>
+{% endblock %}

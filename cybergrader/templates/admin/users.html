@@ -1,0 +1,22 @@
+{% extends "admin/base.html" %}
+{% block admin_title %}Users{% endblock %}
+{% block content %}
+<main class="wrap page">
+  <h1>Users</h1>
+  <form class="scanbox" method="get" action="{{ url_for('admin.users') }}" style="margin-bottom:16px">
+    <input name="q" value="{{ query }}" placeholder="Search by email, name or company" aria-label="Search users">
+    <button class="btn" type="submit">Search</button></form>
+  <section class="panel">
+    {% if users %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>Customer</th><th>Company</th><th class="num">Credits</th><th>Plan</th><th class="num">Checks</th><th class="num">Spent</th><th>Joined</th></tr></thead>
+      <tbody>{% for u in users %}
+        <tr><td><a href="{{ url_for('admin.user_detail', user_id=u.id) }}">{{ u.email }}</a>{% if u.disabled %} <span class="tag tag-err">disabled</span>{% endif %}<br><small>{{ u.name }}</small></td>
+          <td>{{ u.company }}</td><td class="num">{{ u.credits }}</td>
+          <td>{% if u.plan_expires_at and u.plan_expires_at > now_iso %}{{ u.plan_name }} until {{ u.plan_expires_at|date }}{% endif %}</td>
+          <td class="num">{{ u.scan_count }}</td><td class="num">{{ money(u.spent) }}</td><td>{{ u.created_at|date }}</td></tr>
+      {% endfor %}</tbody></table></div>
+    {% else %}<p class="empty">{{ 'No users match that search.' if query else 'No customers yet.' }}</p>{% endif %}
+  </section>
+</main>
+{% endblock %}

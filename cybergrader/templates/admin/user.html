@@ -1,0 +1,80 @@
+{% extends "admin/base.html" %}
+{% import "macros.html" as ui with context %}
+{% block admin_title %}{{ user.email }}{% endblock %}
+{% block content %}
+<main class="wrap page">
+  <p><a href="{{ url_for('admin.users') }}">← Users</a></p>
+  <h1>{{ user.name }}</h1>
+  <p class="lead">{{ user.email }}{% if user.company %} · {{ user.company }}{% endif %} · joined {{ user.created_at|date }}
+    {%- if user.last_login_at %} · last seen {{ user.last_login_at|ago }}{% endif %}
+    {% if user.disabled %} <span class="tag tag-err">disabled</span>{% endif %}</p>
+
+  <div class="stats">
+    <div class="stat"><span>Credits</span><strong>{{ user.credits }}</strong></div>
+    <div class="stat"><span>Plan</span>{% if plan.active %}<strong>{{ plan.name }}</strong><small>{{ 'unlimited' if plan.unlimited else plan.scans_left ~ ' checks left' }} · until {{ plan.expires_at|date }}</small>{% else %}<strong>None</strong>{% endif %}</div>
+    <div class="stat"><span>API key</span><strong>{{ 'Yes' if user.api_key_hint else 'No' }}</strong>{% if user.api_key_hint %}<small><code>{{ user.api_key_hint }}</code></small>{% endif %}</div>
+  </div>
+
+  <div class="grid2">
+    <section class="panel"><h2>Adjust credits</h2><p class="sub">Use a negative number to remove credits. Logged with your reason.</p>
+      <form method="post" action="{{ url_for('admin.user_credits', user_id=user.id) }}">{{ csrf_field() }}
+        <div class="grid2">{{ ui.field('change', 'Change', '', type='number', attrs='required step="1"') }}
+        {{ ui.field('reason', 'Reason', '', placeholder='Goodwill / refund / promo') }}</div>
+        <button class="btn btn-secondary" type="submit">Apply</button></form></section>
+    <section class="panel"><h2>Plan</h2><p class="sub">Grant a plan without payment (no invoice), or end the current one.</p>
+      <form method="post" action="{{ url_for('admin.user_plan', user_id=user.id) }}">{{ csrf_field() }}
+        <div class="field"><label for="plan_id">Plan</label><select id="plan_id" name="plan_id">
+          {% for p in plans %}<option value="{{ p.id }}">{{ p.name }} ({{ p.days }} days, {{ p.scans or 'unlimited' }} checks)</option>{% endfor %}</select></div>
+        <div class="actions"><button class="btn btn-secondary" type="submit" name="action" value="grant">Grant plan</button>
+          {% if plan.active %}<button class="btn btn-danger" type="submit" name="action" value="end">End plan now</button>{% endif %}</div></form></section>
+  </div>
+
+  <div class="grid2">
+    <section class="panel"><h2>Set a new password</h2><p class="sub">For customers who can't use the email reset.</p>
+      <form method="post" action="{{ url_for('admin.user_password', user_id=user.id) }}">{{ csrf_field() }}
+        {{ ui.field('password', 'Temporary password', type='text', help='At least 10 characters.', attrs='autocomplete="off" required minlength="10"') }}
+        <button class="btn btn-secondary" type="submit">Set password</button></form></section>
+    <section class="panel"><h2>Account status</h2><p class="sub">Disabled accounts can't sign in or use the API. Their invoices are kept.</p>
+      <form method="post" action="{{ url_for('admin.user_status', user_id=user.id) }}">{{ csrf_field() }}
+        <button class="btn {{ 'btn-secondary' if user.disabled else 'btn-danger' }}" type="submit">{{ 'Enable account' if user.disabled else 'Disable account' }}</button></form></section>
+  </div>
+
+  <section class="panel"><h2>Payments</h2>
+    {% if orders %}<div class="table-wrap"><table>
+      <thead><tr><th>Date</th><th>Item</th><th class="num">Amount</th><th>Status</th><th>Invoice</th></tr></thead>
+      <tbody>{% for o in orders %}<tr><td>{{ o.created_at|date }}</td><td class="wrap-cell">{{ o.description }}</td><td class="num">{{ money(o.amount_cents) }}</td>
+        <td>{{ ui.status_tag(o.status) }}</td><td>{% if o.invoice %}<a href="{{ url_for('admin.invoice', number=o.invoice) }}">{{ o.invoice }}</a>{% endif %}</td></tr>{% endfor %}</tbody>
+    </table></div>{% else %}<p class="empty">No payments.</p>{% endif %}</section>
+
+  <section class="panel"><h2>Checks</h2>
+    {% if scans %}<div class="table-wrap"><table>
+      <thead><tr><th>Date</th><th>Domain</th><th>Grade</th><th>Paid with</th></tr></thead>
+      <tbody>{% for s in scans %}<tr><td>{{ s.created_at|date(true) }}</td><td>{{ s.domain }}</td><td>{{ ui.grade_chip(s.grade) }}</td><td>{{ s.paid_with }}</td></tr>{% endfor %}</tbody>
+    </table></div>{% else %}<p class="empty">No checks yet.</p>{% endif %}</section>
+
+  {% if clients %}
+  <section class="panel"><h2>Managed clients ({{ clients|length }})</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Client</th><th>Domain</th><th>Contact</th><th>Approval</th></tr></thead>
+      <tbody>{% for c in clients %}<tr><td>{{ c.name }}</td><td>{{ c.domain }}</td><td>{{ c.contact_email }}</td>
+        <td>{% include "site/_approval_tag.html" %}{% if c.approved_by %}<br><small>{{ c.approved_by }}, {{ c.approved_at|date }}</small>{% endif %}</td></tr>{% endfor %}</tbody>
+    </table></div></section>
+  {% endif %}
+
+  {% if audits %}
+  <section class="panel"><h2>Building network audits</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Date</th><th>Site</th><th>Grade</th><th>Score</th><th>Findings</th></tr></thead>
+      <tbody>{% for a in audits %}{% set data = a.report_json|fromjson %}<tr><td>{{ a.created_at|date(true) }}</td><td>{{ a.site_name or a.domain }}</td>
+        <td>{{ ui.grade_chip(a.grade) }}</td><td>{{ a.score }}</td><td class="wrap-cell">{{ data.findings|map(attribute='title')|join('; ') or 'none' }}</td></tr>{% endfor %}</tbody>
+    </table></div></section>
+  {% endif %}
+
+  <section class="panel"><h2>Credit history</h2>
+    {% if ledger %}<div class="table-wrap"><table>
+      <thead><tr><th>When</th><th>What</th><th class="num">Change</th><th class="num">Balance</th></tr></thead>
+      <tbody>{% for row in ledger %}<tr><td>{{ row.created_at|date(true) }}</td><td class="wrap-cell">{{ row.reason }}</td>
+        <td class="num">{{ '%+d'|format(row.change) }}</td><td class="num">{{ row.balance }}</td></tr>{% endfor %}</tbody>
+    </table></div>{% else %}<p class="empty">No credit changes.</p>{% endif %}</section>
+</main>
+{% endblock %}

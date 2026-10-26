@@ -1,33 +1,4 @@
-# Python
+# Holds the admin password hash, session key, API key and scan history
+instance/
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-.env
-.venv/
-.venv
-
-# Local secrets (do not commit)
-app/core/secrets_local.py
-
-# Uploads
-app/uploads/
-
-# DB
-*.db
-
-# VSCode
-.vscode/
-
-# Alembic
-alembic/versions/*.pyc
-*.DS_Store
-
-# Backups and logs (runtime artefacts, not source code)
-backups/
-server_log.txt
-crm_install_log.txt
-*.log
-
-# Claude Code session data
-.claude/
+.pytest_cache/

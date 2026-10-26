@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} · {{ site.business_name }}{% endblock %}
+{% block content %}
+<main class="wrap"><div class="auth panel">
+  <h1>{{ heading }}</h1>
+  <p class="sub">{{ message }}</p>
+  <a class="btn" href="{{ url_for('site.landing') }}">Go to the home page</a>
+</div></main>
+{% endblock %}

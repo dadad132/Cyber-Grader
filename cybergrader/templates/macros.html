@@ -1,0 +1,69 @@
+{% macro field(name, label, value='', type='text', help='', placeholder='', attrs='') -%}
+<div class="field"><label for="{{ name }}">{{ label }}</label>
+<input id="{{ name }}" name="{{ name }}" type="{{ type }}" value="{{ value }}" placeholder="{{ placeholder }}"{% if help %} aria-describedby="{{ name }}-help"{% endif %} {{ attrs|safe }}>
+{% if help %}<span class="help" id="{{ name }}-help">{{ help|safe }}</span>{% endif %}</div>
+{%- endmacro %}
+
+{% macro textarea(name, label, value='', help='', placeholder='', cls='', attrs='') -%}
+<div class="field"><label for="{{ name }}">{{ label }}</label>
+<textarea id="{{ name }}" name="{{ name }}" placeholder="{{ placeholder }}" class="{{ cls }}" {{ attrs|safe }}>{{ value }}</textarea>
+{% if help %}<span class="help">{{ help|safe }}</span>{% endif %}</div>
+{%- endmacro %}
+
+{% macro checkbox(name, label, checked=false, help='') -%}
+<div class="field check"><input id="{{ name }}" name="{{ name }}" type="checkbox"{% if checked %} checked{% endif %}>
+<label for="{{ name }}">{{ label }}{% if help %}<span class="help">{{ help|safe }}</span>{% endif %}</label></div>
+{%- endmacro %}
+
+{% macro grade_chip(grade) -%}<span class="chip tone-{{ grade|tone }}">{{ grade }}</span>{%- endmacro %}
+
+{% macro status_tag(status) -%}
+<span class="tag {{ {'paid': 'tag-ok', 'pending': 'tag-warn', 'failed': 'tag-err'}.get(status, '') }}">{{ status }}</span>
+{%- endmacro %}
+
+{% macro price_cards(products, signed_in, payments_ready) -%}
+{% if products.plans %}
+<div class="prices">
+{% for plan in products.plans %}
+  <div class="price-card featured">
+    <span class="eyebrow">Monthly plan</span>
+    <h3>{{ plan.name }}</h3>
+    <div class="amount">{{ plan.price }}</div><p class="per">for {{ plan.days }} days</p>
+    <p>{{ plan.allowance }} for {{ plan.days }} days. Renew whenever you like; nothing is debited automatically.</p>
+    {{ buy_button(plan, signed_in, 'Get ' ~ plan.name) }}
+  </div>
+{% endfor %}
+{% for pack in products.packs %}
+  <div class="price-card">
+    <span class="eyebrow">Credits</span>
+    <h3>{{ pack.name }}</h3>
+    <div class="amount">{{ pack.price }}</div>
+    <p>{{ pack.credits }} check{{ '' if pack.credits == 1 else 's' }}{% if pack.each %} · {{ pack.each }} each{% endif %}. Credits never expire.</p>
+    {{ buy_button(pack, signed_in, 'Buy') }}
+  </div>
+{% endfor %}
+</div>
+{% else %}
+<div class="prices">
+{% for pack in products.packs %}
+  <div class="price-card{% if loop.index == 2 %} featured{% endif %}">
+    <span class="eyebrow">Credits</span>
+    <h3>{{ pack.name }}</h3>
+    <div class="amount">{{ pack.price }}</div>
+    <p>{{ pack.credits }} check{{ '' if pack.credits == 1 else 's' }}{% if pack.each %} · {{ pack.each }} each{% endif %}. Credits never expire.</p>
+    {{ buy_button(pack, signed_in, 'Buy') }}
+  </div>
+{% endfor %}
+</div>
+{% endif %}
+<p class="pricing-note">Prices in South African rand{% if site.vat_registered %}, including {{ site.vat_rate|num }}% VAT{% endif %}. Pay by card or Instant EFT through Yoco. You get an invoice for every payment.</p>
+{%- endmacro %}
+
+{% macro buy_button(product, signed_in, label) -%}
+{% if signed_in %}
+<form method="post" action="{{ url_for('site.checkout', product_id=product.id) }}" data-busy="Opening Yoco…">{{ csrf_field() }}
+<button class="btn btn-block" type="submit">{{ label }}</button></form>
+{% else %}
+<a class="btn btn-block" href="{{ url_for('site.signup', next=url_for('site.buy')) }}">Sign up to buy</a>
+{% endif %}
+{%- endmacro %}

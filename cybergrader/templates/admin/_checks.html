@@ -1,0 +1,7 @@
+{% set icons = {'ok': '✓', 'warn': '!', 'fail': '✕', 'info': 'i'} %}
+<ul class="checklist status">
+{% for c in items %}
+  <li class="st-{{ c.status }}"><span class="icon{% if c.status == 'ok' %} icon-ok{% endif %}" aria-hidden="true">{{ icons[c.status] }}</span>
+    <div class="item"><strong>{{ c.name }}</strong><p>{{ c.detail }}</p>{% if c.fix %}<p class="fixline">To do: {{ c.fix }}</p>{% endif %}</div></li>
+{% endfor %}
+</ul>

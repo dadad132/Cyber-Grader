@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui with context %}
+{% block title %}{{ report.display_domain }} domain health: grade {{ report.grade }} | {{ site.business_name }}{% endblock %}
+{% block content %}
+<div class="wrap toolbar">
+  <a class="btn btn-secondary btn-small" href="{{ url_for('site.landing') }}">← Check another domain</a>
+  <span class="spacer"></span>
+  {% if unlocked %}
+  <a class="btn btn-secondary btn-small" href="{{ url_for('preview.pdf', token=row.token) }}">Download PDF</a>
+  <button class="btn btn-secondary btn-small" type="button" data-print>Print</button>
+  {% endif %}
+</div>
+
+{% if unlocked %}
+  {% if row.unlocked_by %}<div class="wrap"><p class="flash flash-ok">Full report unlocked for the verified owner ({{ row.unlocked_by }}).</p></div>{% endif %}
+  {{ body }}
+  <div class="wrap">{% with action=url_for('preview.request_help', token=row.token), anonymous=current_user is none %}{% include "_fix_cta.html" %}{% endwith %}</div>
+{% else %}
+<main class="wrap">
+  <section class="hero">
+    <div class="grade tone-{{ report.grade|tone }}" role="img" aria-label="Grade {{ report.grade }}">{{ report.grade }}</div>
+    <div>
+      <p class="eyebrow">Domain health check</p>
+      <h1>{{ report.display_domain }}</h1>
+      <p class="verdict">{{ verdict }}</p>
+      <p class="meta">Score {{ report.score }}/100 · checked {{ report.scanned_at.strftime('%d %b %Y, %H:%M') }} UTC</p>
+    </div>
+  </section>
+
+  <section class="cats">
+  {% for cat in report.categories %}
+    <div class="cat"><span class="cat-name">{{ cat.name }}</span>
+      <div class="cat-row"><strong>{{ cat.percent ~ '%' if cat.percent is not none else 'n/a' }}</strong>
+        <span>{{ '%g of %g pts'|format(cat.points, cat.max_points) if cat.max_points else 'not applicable' }}</span></div>
+      <div class="bar">{% if cat.percent is not none %}<span class="tone-{{ cat.percent|tone }}" style="width:{{ cat.percent }}%"></span>{% endif %}</div></div>
+  {% endfor %}
+  </section>
+
+  <section class="panel">
+    <h2>{{ summary.issues }} thing{{ '' if summary.issues == 1 else 's' }} to fix · {{ summary.passed }} passed</h2>
+    <p class="sevrow">
+      {% for level in ('critical', 'high', 'medium', 'low') %}{% if summary.counts[level] %}
+      <span class="sev sev-{{ level }}"><span class="pill">{{ level }}</span> {{ summary.counts[level] }}</span>
+      {% endif %}{% endfor %}
+    </p>
+    <ul class="locked-list">
+    {% for area, info in summary.by_area.items() %}
+      <li><span class="lock" aria-hidden="true">🔒</span> {{ info.count }} issue{{ '' if info.count == 1 else 's' }} in {{ area }} <span class="sev sev-{{ info.worst }}"><span class="pill">worst: {{ info.worst }}</span></span></li>
+    {% endfor %}
+    </ul>
+    <p class="sub">The full report shows exactly which checks failed, the evidence we found, and step-by-step fixes. Details are only shown to the domain's owner or a signed-in customer, so this site can't be used to scout other companies' weak spots.</p>
+  </section>
+
+  <section class="unlock-grid">
+    {% if site.owner_unlock_free and site.email_ready %}
+    <div class="panel" id="owner">
+      <span class="eyebrow">Free for owners</span>
+      <h2>I own {{ report.display_domain }}</h2>
+      {% if code_pending %}
+        <p class="sub">Enter the 6-digit code we emailed to <strong>{{ code_email }}</strong>.</p>
+        <form method="post" action="{{ url_for('preview.verify_code', token=row.token) }}" class="scanbox">{{ csrf_field() }}
+          <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" maxlength="7" required placeholder="123456" aria-label="Verification code">
+          <button class="btn" type="submit">Unlock report</button></form>
+        <p class="sub" style="margin-top:10px">No email? Check spam, or send a new code below.</p>
+      {% else %}
+        <p class="sub">We'll email a code to an address at <strong>@{{ row.domain }}</strong> to confirm it's yours, then show the full report and email you the PDF.</p>
+      {% endif %}
+      <form method="post" action="{{ url_for('preview.send_code', token=row.token) }}" class="scanbox">{{ csrf_field() }}
+        <input name="email" type="text" autocomplete="email" required placeholder="you@{{ row.domain }}" aria-label="Your email at {{ row.domain }}">
+        <button class="btn {{ 'btn-secondary' if code_pending else '' }}" type="submit">{{ 'Send a new code' if code_pending else 'Email me a code' }}</button></form>
+    </div>
+    {% endif %}
+    <div class="panel">
+      <span class="eyebrow">Any domain</span>
+      <h2>Unlock with a credit</h2>
+      {% if current_user %}
+        <p class="sub">Uses {{ 'one of your plan checks' if plan and plan.active else 'one of your ' ~ current_user.credits ~ ' credit' ~ ('' if current_user.credits == 1 else 's') }}. The report, PDF and fixes are saved in your account.</p>
+        <form method="post" action="{{ url_for('preview.unlock', token=row.token) }}" data-busy="Unlocking…">{{ csrf_field() }}
+          <button class="btn" type="submit">Unlock full report</button></form>
+      {% else %}
+        <p class="sub">Create a free account{% if site.signup_credits %}; it includes {{ site.signup_credits }} free credit{{ '' if site.signup_credits == 1 else 's' }}, enough to unlock this report{% endif %}. Ideal for checking clients' and suppliers' domains.</p>
+        <a class="btn" href="{{ url_for('site.signup', next=url_for('preview.show', token=row.token)) }}">Sign up free to unlock</a>
+        <p class="sub" style="margin-top:10px">Already have an account? <a href="{{ url_for('site.login', next=url_for('preview.show', token=row.token)) }}">Log in</a></p>
+      {% endif %}
+    </div>
+  </section>
+
+  {% with action=url_for('preview.request_help', token=row.token), anonymous=current_user is none %}{% include "_fix_cta.html" %}{% endwith %}
+</main>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,13 @@
+Hello,
+
+Your verification code for the {{ domain }} domain health report is:
+
+    {{ code }}
+
+It works for {{ minutes }} minutes. Enter it on the report page to see the full report.
+
+Someone asked to unlock the security report for {{ domain }} using this address. If that wasn't you, ignore this email;
+nothing is unlocked without the code.
+
+{{ settings.business_name }}{% if settings.contact_email %}
+{{ settings.contact_email }}{% endif %}

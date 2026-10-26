@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui with context %}
+{% block title %}Dashboard · {{ site.business_name }}{% endblock %}
+{% block content %}
+<main class="wrap page">
+  <h1>Hi {{ current_user.name.split(' ')[0] }}</h1>
+  <p class="lead">Check a domain to see its security grade and a prioritised fix list.</p>
+
+  {% if plan.active and plan.days_left <= 3 %}
+  <p class="flash flash-warn">Your {{ plan.name }} plan ends on {{ plan.expires_at|date }}. <a href="{{ url_for('site.buy') }}">Renew it</a> to keep your checks.</p>
+  {% endif %}
+
+  <div class="stats">
+    <div class="stat"><span>Credits</span><strong>{{ current_user.credits }}</strong><small>Never expire</small></div>
+    <div class="stat"><span>Monthly plan</span>
+      {% if plan.active %}<strong>{{ 'Unlimited' if plan.unlimited else plan.scans_left }}</strong><small>{{ plan.name }} · checks left until {{ plan.expires_at|date }}</small>
+      {% elif plan.expired %}<strong>Ended</strong><small>{{ plan.name }} ended {{ plan.expires_at|date }} · <a href="{{ url_for('site.buy') }}">Renew</a></small>
+      {% else %}<strong>None</strong><small><a href="{{ url_for('site.buy') }}">See plans</a></small>{% endif %}</div>
+    <div class="stat"><span>Checks run</span><strong>{{ scans|length }}</strong><small>Reports are kept in your account</small></div>
+  </div>
+
+  <section class="panel">
+    <h2>Check a domain</h2>
+    {% if site.charge_for_checks %}<p class="sub">Uses {{ 'one of your plan checks' if plan.active else 'one credit' }}. If the check can't run, you aren't charged.</p>
+    {% else %}<p class="sub">Checks are free at the moment: the full report and PDF don't use a credit.</p>{% endif %}
+    {% if not site.charge_for_checks or plan.active or current_user.credits > 0 %}
+    <form class="scanbox" method="post" action="{{ url_for('site.scan') }}" data-busy="Checking… (about 10 seconds)">{{ csrf_field() }}
+      <input name="domain" type="text" inputmode="url" spellcheck="false" autocomplete="off" required placeholder="yourbusiness.co.za" aria-label="Domain to check" value="{{ prefill }}">
+      <button class="btn btn-lg" type="submit">Check domain</button>
+    </form>
+    {% else %}
+    <p class="flash flash-info">You've used all your checks. <a href="{{ url_for('site.buy') }}">Buy credits or a monthly plan</a> to keep going.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <h2>Your reports</h2>
+    {% if scans %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>Domain</th><th>Grade</th><th>Score</th><th>Checked</th><th></th></tr></thead>
+      <tbody>{% for scan in scans %}
+        <tr><td><a href="{{ url_for('site.scan_report', scan_id=scan.id) }}">{{ scan.domain }}</a></td>
+          <td>{{ ui.grade_chip(scan.grade) }}</td><td>{{ scan.score }}</td><td>{{ scan.created_at|date(true) }}</td>
+          <td><a href="{{ url_for('site.scan_report', scan_id=scan.id) }}">View report</a></td></tr>
+      {% endfor %}</tbody></table></div>
+    {% else %}<p class="empty">No checks yet. Try your own domain first.</p>{% endif %}
+  </section>
+
+  {% if audits %}
+  <section class="panel">
+    <h2>Building network audits</h2>
+    <p class="sub">Uploaded by the on-site agent or phone app with your API key. <a href="{{ url_for('site.network_audit_guide') }}">How to run one</a></p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Site</th><th>Grade</th><th>Score</th><th>Audited</th><th></th></tr></thead>
+      <tbody>{% for a in audits %}
+        <tr><td>{{ a.site_name or a.domain or 'Network' }}</td><td>{{ ui.grade_chip(a.grade) }}</td><td>{{ a.score }}</td>
+          <td>{{ a.created_at|date(true) }}</td><td><a href="{{ url_for('site.lan_audit', audit_id=a.id) }}">View audit</a></td></tr>
+      {% endfor %}</tbody></table></div>
+  </section>
+  {% else %}
+  <section class="panel">
+    <h2>On-site network audits</h2>
+    <p class="sub">Visiting an office? Check its Wi-Fi, router and network segmentation from the inside with our Android app or a laptop.
+      <a href="{{ url_for('site.network_audit_guide') }}">Step-by-step guide</a></p>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

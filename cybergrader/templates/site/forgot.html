@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% import "macros.html" as ui with context %}
+{% block title %}Reset your password · {{ site.business_name }}{% endblock %}
+{% block content %}
+<main class="wrap"><div class="auth panel">
+  <h1>Reset your password</h1>
+  {% if sent %}
+    <p class="flash flash-ok">If there's an account for that email, we've sent a link to reset the password. It works for one hour.</p>
+    <p class="sub">Nothing arrived after a few minutes? Check your spam folder{% if site.contact_email %}, or contact us at <a href="mailto:{{ site.contact_email }}">{{ site.contact_email }}</a>{% endif %}.</p>
+  {% elif not site.email_ready %}
+    <p class="sub">Password resets by email aren't available yet. Please contact us{% if site.contact_email %} at <a href="mailto:{{ site.contact_email }}">{{ site.contact_email }}</a>{% endif %} and we'll help you get back in.</p>
+  {% else %}
+    <p class="sub">Enter the email you signed up with and we'll send you a reset link.</p>
+    {% if error %}<p class="flash flash-err" role="alert">{{ error }}</p>{% endif %}
+    <form method="post" action="{{ url_for('site.forgot') }}">{{ csrf_field() }}
+      {{ ui.field('email', 'Email', type='email', attrs='autocomplete="email" required autofocus') }}
+      <button class="btn btn-block" type="submit">Send reset link</button>
+    </form>
+  {% endif %}
+  <p class="alt"><a href="{{ url_for('site.login') }}">Back to log in</a></p>
+</div></main>
+{% endblock %}
