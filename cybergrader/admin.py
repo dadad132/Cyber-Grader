@@ -16,12 +16,12 @@ from datetime import timedelta
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from . import accounts, billing
+from . import accounts, billing, postpaid
 from .accounts import AccountError
 from .billing import BillingError
 from .context import DEFAULT_USER_AGENT
 from .db import iso, parse_iso, request_db, transaction, utcnow
-from .mailer import MailError, send_mail
+from .mailer import MailError, send_later, send_mail
 from .report import render_html
 from .selfcheck import SystemCheck, run_selfcheck
 from .service import GraderService, ScanRefused, check_domain_input
@@ -107,6 +107,9 @@ def create_admin_blueprint(service: GraderService) -> Blueprint:
     bp = Blueprint("admin", __name__, url_prefix="/admin")
     store = service.store
     selfcheck_cache: dict = {"at": 0.0, "checks": []}
+
+    def base_url() -> str:
+        return store.current.site_url.rstrip("/") or request.host_url.rstrip("/")
 
     @bp.before_request
     def guard():
@@ -208,6 +211,8 @@ def create_admin_blueprint(service: GraderService) -> Blueprint:
             "pending": conn.execute("SELECT COUNT(*) FROM orders WHERE status = 'pending'").fetchone()[0],
             "free_checks": conn.execute("SELECT COUNT(*) FROM previews WHERE created_at >= ?", (week,)).fetchone()[0],
             "new_leads": conn.execute("SELECT COUNT(*) FROM leads WHERE status = 'new'").fetchone()[0],
+            "overdue_bills": conn.execute("SELECT COUNT(*) FROM orders WHERE product_kind = 'bill' AND status != 'paid' "
+                                          "AND due_at <= ?", (iso(utcnow()),)).fetchone()[0],
         }
         previews = conn.execute("SELECT token, domain, grade, score, unlocked_by, created_at FROM previews "
                                 "ORDER BY created_at DESC LIMIT 10").fetchall()
@@ -273,7 +278,7 @@ def create_admin_blueprint(service: GraderService) -> Blueprint:
             audits=conn.execute("SELECT id, site_name, domain, grade, score, report_json, created_at FROM lan_audits "
                                 "WHERE user_id = ? ORDER BY id DESC LIMIT 25", (user_id,)).fetchall(),
             clients=conn.execute("SELECT * FROM clients WHERE user_id = ? ORDER BY name COLLATE NOCASE", (user_id,)).fetchall(),
-            plans=store.current.plans)
+            plans=store.current.plans, account_info=postpaid.summary(conn, store.current, user))
 
     @bp.post("/users/<int:user_id>/credits")
     def user_credits(user_id):
@@ -308,6 +313,35 @@ def create_admin_blueprint(service: GraderService) -> Blueprint:
                     accounts.apply_plan(conn, user_id, plan_id=plan["id"], plan_name=plan["name"], days=plan["days"],
                                         scans=plan["scans"] or None)
                 flash(f"{plan['name']} plan granted for {plan['days']} days (no payment or invoice).", "ok")
+        return redirect(url_for("admin.user_detail", user_id=user_id))
+
+    @bp.post("/users/<int:user_id>/account")
+    def user_account(user_id):
+        load_user(user_id)
+        conn, settings, action = request_db(), store.current, request.form.get("action")
+        name = settings.account_name
+        if action == "open":
+            with transaction(conn):
+                accounts.open_account(conn, user_id)
+            flash(f"{name} opened without payment (no invoice). It's billed monthly from today.", "ok")
+        elif action in ("close", "keep"):
+            with transaction(conn):
+                changed = postpaid.set_closing(conn, user_id, action == "close")
+            if changed:
+                flash(f"{name} will close on its next billing day, after a final bill." if action == "close"
+                      else f"{name} stays open.", "ok")
+        elif action == "bill":
+            bill = postpaid.bill_now(conn, settings, user_id)
+            if bill is None:
+                flash("Nothing to bill.", "info")
+            else:
+                if settings.email_ready:
+                    owner = load_user(user_id)
+                    subject, text = postpaid.bill_email(settings, bill, "issued", base_url() + url_for("site.bill", ref=bill["ref"]))
+                    send_later(settings, owner["email"], subject, text)
+                    conn.execute("UPDATE orders SET notice = 'issued' WHERE id = ?", (bill["id"],))
+                flash(f"Bill of {billing.money(bill['amount_cents'])} issued{' and emailed' if settings.email_ready else ''}. "
+                      f"It's due {parse_iso(bill['due_at']):%d %b %Y}.", "ok")
         return redirect(url_for("admin.user_detail", user_id=user_id))
 
     @bp.post("/users/<int:user_id>/status")

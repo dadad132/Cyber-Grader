@@ -12,10 +12,10 @@ from pathlib import Path
 from flask import Blueprint, Response, abort, flash, g, jsonify, redirect, render_template, request, session, url_for
 from markupsafe import Markup
 
-from . import accounts, billing, external, lan
+from . import accounts, billing, external, lan, postpaid
 from .accounts import AccountError, password_problem
 from .billing import BillingError, money
-from .db import iso, parse_iso, request_db, utcnow
+from .db import iso, parse_iso, request_db, transaction, utcnow
 from .leads import LeadError, clean_lead, record_lead
 from .mailer import send_later
 from .pdf import PdfUnavailable, report_pdf
@@ -32,7 +32,9 @@ APP_PATH = Path(__file__).resolve().parents[1] / "tools" / "building-network-aud
 
 
 class NoCredits(Exception):
-    pass
+    def __init__(self, message: str = "", bill_ref: str = "") -> None:
+        super().__init__(message or "You're out of checks. Buy credits or a monthly plan to keep going.")
+        self.bill_ref = bill_ref  # set when an unpaid monthly bill is what's in the way
 
 
 def _password_marker(user: sqlite3.Row) -> str:
@@ -56,20 +58,43 @@ def product_cards(settings: Settings) -> dict:
     for plan in settings.plans:
         allowance = "Unlimited checks" if not plan["scans"] else f"{plan['scans']} checks"
         plans.append({**plan, "price": money(plan["price_cents"]), "allowance": allowance})
-    return {"packs": packs, "plans": plans}
+    account = None
+    if settings.account_enabled:
+        account = {**settings.product("account"), "price": money(settings.account_fee_cents),
+                   "per_check": money(settings.account_check_cents), "limit": settings.account_max_checks,
+                   "grace_days": settings.account_grace_days}
+    return {"packs": packs, "plans": plans, "account": account}
+
+
+def charge_check(conn: sqlite3.Connection, settings: Settings, user: sqlite3.Row, domain: str) -> tuple[str, int | None]:
+    """Pay for one check: plan allowance, then a credit, then the monthly account (billed later).
+    Returns (how it was paid, price on the monthly bill) or raises NoCredits saying why it can't be paid."""
+    method = accounts.charge_for_scan(conn, user["id"], domain, free=not settings.charge_for_checks)
+    if method:
+        return method, None
+    account = postpaid.summary(conn, settings, user)
+    if account["usable"]:
+        return "account", settings.account_check_cents
+    name = settings.account_name.lower()
+    if account["open"] and account["on_hold"]:
+        bill = account["overdue"]
+        raise NoCredits(f"Your {name} is on hold because the bill of {money(bill['amount_cents'])} due on "
+                        f"{parse_iso(bill['due_at']):%d %b} hasn't been paid. Pay it to carry on checking.", bill["ref"])
+    if account["open"] and account["limit_reached"]:
+        raise NoCredits(f"You've used this month's {account['limit']} checks on your {name}. The limit resets on "
+                        f"{account['period_end']:%d %b}; buy credits if you need more checks before then.")
+    raise NoCredits()
 
 
 def run_paid_scan(conn: sqlite3.Connection, service: GraderService, user: sqlite3.Row, domain: str) -> int:
-    """Charge one check (plan allowance first, then a credit), run it, and refund if it can't run."""
-    method = accounts.charge_for_scan(conn, user["id"], domain, free=not service.store.current.charge_for_checks)
-    if method is None:
-        raise NoCredits()
+    """Charge one check (see charge_check), run it, and refund if it can't run."""
+    method, price = charge_check(conn, service.store.current, user, domain)
     try:
         report = service.scan(domain, client=f"user:{user['id']}")
     except BaseException:
-        accounts.refund_scan(conn, user["id"], method, domain)
+        accounts.refund_scan(conn, user["id"], method, domain)  # nothing to undo for a monthly account
         raise
-    return accounts.record_scan(conn, user["id"], report, method)
+    return accounts.record_scan(conn, user["id"], report, method, price)
 
 
 def create_site_blueprint(service: GraderService) -> Blueprint:
@@ -228,6 +253,9 @@ def create_site_blueprint(service: GraderService) -> Blueprint:
 
     # --- checks ----------------------------------------------------------------------------------
 
+    def account_summary() -> dict:
+        return postpaid.summary(request_db(), store.current, g.user)
+
     @bp.get("/app")
     @login_required
     def dashboard():
@@ -238,7 +266,7 @@ def create_site_blueprint(service: GraderService) -> Blueprint:
             "SELECT id, site_name, domain, grade, score, created_at FROM lan_audits WHERE user_id = ? ORDER BY id DESC LIMIT 20",
             (g.user["id"],)).fetchall()
         return render_template("site/dashboard.html", scans=scans, audits=audits, plan=accounts.plan_status(g.user),
-                               prefill=request.args.get("domain", ""), active="dashboard")
+                               account_info=account_summary(), prefill=request.args.get("domain", ""), active="dashboard")
 
     @bp.post("/app/scan")
     @login_required
@@ -258,9 +286,9 @@ def create_site_blueprint(service: GraderService) -> Blueprint:
                 return redirect(url_for("site.scan_report", scan_id=recent["id"]))
         try:
             scan_id = run_paid_scan(conn, service, g.user, domain)
-        except NoCredits:
-            flash("You're out of checks. Buy credits or a monthly plan to keep going.", "err")
-            return redirect(url_for("site.buy"))
+        except NoCredits as exc:
+            flash(str(exc), "err")
+            return redirect(url_for("site.bill", ref=exc.bill_ref) if exc.bill_ref else url_for("site.buy"))
         except ScanRefused as exc:
             flash(f"{domain}: {exc} You haven't been charged.", "err")
             return redirect(url_for("site.dashboard", domain=raw))
@@ -279,11 +307,19 @@ def create_site_blueprint(service: GraderService) -> Blueprint:
         report = accounts.load_report(row)
         body = Markup(report_body(report, store.current.branding(), cta=False))
         return render_template("site/report.html", report=report, body=body, scan=row, active="dashboard",
-                               tier=store.current.fix_tier(report.grade, report.score), client=client_of(report.domain))
+                               tier=store.current.fix_tier(report.grade, report.score), client=client_of(report.domain),
+                               prepared_for=default_recipient(report.domain))
 
     def client_of(domain: str) -> sqlite3.Row | None:
         """The signed-in IT firm's client record for a domain, if they manage it."""
         return request_db().execute("SELECT * FROM clients WHERE user_id = ? AND domain = ?", (g.user["id"], domain)).fetchone()
+
+    def default_recipient(domain: str) -> str:
+        """Who a report's PDF says it's "Prepared for" unless the customer types something else."""
+        client = client_of(domain)
+        if g.user["firm_name"]:
+            return client["name"] if client else ""
+        return g.user["company"] or g.user["name"]
 
     @bp.get("/app/scans/<int:scan_id>/pdf")
     @login_required
@@ -291,13 +327,17 @@ def create_site_blueprint(service: GraderService) -> Blueprint:
         report = accounts.load_report(own_scan(scan_id))
         client = client_of(report.domain)
         settings = store.current
+        if "prepared_for" in request.args:  # typed on the report page; blank leaves the line out (e.g. cold outreach)
+            recipient = " ".join(request.args["prepared_for"].split())[:80]
+        else:
+            recipient = default_recipient(report.domain)
         try:
             if g.user["firm_name"]:  # IT firms get reports under their own name
-                data = report_pdf(report, accounts.firm_branding(g.user), recipient=client["name"] if client else "",
+                data = report_pdf(report, accounts.firm_branding(g.user), recipient=recipient,
                                   powered_by=settings.business_name,
                                   authorised_by=client["approved_by"] if client and client["approval_status"] == "approved" else "")
             else:
-                data = report_pdf(report, settings.branding(), recipient=g.user["company"] or g.user["name"])
+                data = report_pdf(report, settings.branding(), recipient=recipient)
         except PdfUnavailable as exc:
             flash(str(exc), "err")
             return redirect(url_for("site.scan_report", scan_id=scan_id))
@@ -336,8 +376,15 @@ def create_site_blueprint(service: GraderService) -> Blueprint:
     @bp.get("/app/buy")
     @login_required
     def buy():
-        return render_template("site/buy.html", products=product_cards(store.current), plan=accounts.plan_status(g.user),
-                               active="buy")
+        settings = store.current
+        renew = settings.product(request.args.get("renew", ""))  # the link in plan reminder emails
+        if renew and renew["kind"] == "plan":
+            allowance = "unlimited checks" if not renew["scans"] else f"{renew['scans']} checks"
+            renew = {**renew, "price": money(renew["price_cents"]), "allowance": allowance}
+        else:
+            renew = None
+        return render_template("site/buy.html", products=product_cards(settings), plan=accounts.plan_status(g.user),
+                               account_info=account_summary(), renew=renew, active="buy")
 
     @bp.post("/app/buy/<product_id>")
     @login_required
@@ -349,6 +396,9 @@ def create_site_blueprint(service: GraderService) -> Blueprint:
         if not settings.payments_ready:
             flash("Online payments aren't switched on yet. Please contact us to buy credits.", "err")
             return redirect(url_for("site.buy"))
+        if product["kind"] == "account" and g.user["account_status"] == "active":
+            flash(f"Your {settings.account_name.lower()} is already open.", "info")
+            return redirect(url_for("site.account") + "#monthly")
         conn = request_db()
         order = billing.create_order(conn, g.user["id"], product)
         try:
@@ -359,6 +409,51 @@ def create_site_blueprint(service: GraderService) -> Blueprint:
             flash("We couldn't open the payment page just now. Please try again in a moment.", "err")
             return redirect(url_for("site.buy"))
         return redirect(payment_page)
+
+    def own_bill(ref: str) -> sqlite3.Row:
+        bill = request_db().execute("SELECT * FROM orders WHERE ref = ? AND user_id = ? AND product_kind = 'bill'",
+                                    (ref, g.user["id"])).fetchone()
+        if bill is None:
+            abort(404)
+        return bill
+
+    @bp.get("/app/bills/<ref>")
+    @login_required
+    def bill(ref):
+        row = own_bill(ref)
+        invoice = request_db().execute("SELECT number FROM invoices WHERE order_id = ?", (row["id"],)).fetchone()
+        return render_template("site/bill.html", bill=row, lines=json.loads(row["lines_json"]), invoice=invoice,
+                               overdue=row["status"] != "paid" and parse_iso(row["due_at"]) <= utcnow(), active="invoices")
+
+    @bp.post("/app/bills/<ref>/pay")
+    @login_required
+    def pay_bill(ref):
+        row, settings = own_bill(ref), store.current
+        if row["status"] == "paid":
+            return redirect(url_for("site.bill", ref=ref))
+        if not settings.payments_ready:
+            flash("Online payments aren't switched on yet. Please contact us to pay this bill.", "err")
+            return redirect(url_for("site.bill", ref=ref))
+        try:
+            payment_page = billing.start_checkout(request_db(), settings, row, base_url())
+        except BillingError as exc:  # the bill stays owed; nothing to mark failed
+            log.error("Checkout for bill %s failed: %s", ref, exc)
+            flash("We couldn't open the payment page just now. Please try again in a moment.", "err")
+            return redirect(url_for("site.bill", ref=ref))
+        return redirect(payment_page)
+
+    @bp.post("/app/account/monthly")
+    @login_required
+    def monthly_account():
+        settings, closing = store.current, request.form.get("action") == "close"
+        with transaction(request_db()) as conn:
+            changed = postpaid.set_closing(conn, g.user["id"], closing)
+        if changed and closing:
+            flash(f"Your {settings.account_name.lower()} will close on "
+                  f"{parse_iso(g.user['account_period_end']):%d %b %Y}, after a final bill for the checks you've used.", "ok")
+        elif changed:
+            flash(f"Your {settings.account_name.lower()} stays open.", "ok")
+        return redirect(url_for("site.account") + "#monthly")
 
     @bp.get("/app/payment/<ref>")
     @login_required
@@ -408,9 +503,11 @@ def create_site_blueprint(service: GraderService) -> Blueprint:
         conn = request_db()
         rows = conn.execute("SELECT number, issued_at, total_cents FROM invoices WHERE user_id = ? ORDER BY id DESC",
                             (g.user["id"],)).fetchall()
-        pending = conn.execute("SELECT ref, description, amount_cents, created_at, status FROM orders "
-                               "WHERE user_id = ? AND status != 'paid' ORDER BY id DESC LIMIT 10", (g.user["id"],)).fetchall()
-        return render_template("site/invoices.html", invoices=rows, orders=pending, active="invoices")
+        pending = conn.execute("SELECT ref, description, amount_cents, created_at, status FROM orders WHERE user_id = ? "
+                               "AND status != 'paid' AND product_kind != 'bill' ORDER BY id DESC LIMIT 10",
+                               (g.user["id"],)).fetchall()
+        return render_template("site/invoices.html", invoices=rows, orders=pending,
+                               bills=postpaid.unpaid_bills(conn, g.user["id"]), now=utcnow(), active="invoices")
 
     @bp.get("/app/invoices/<number>")
     @login_required
@@ -425,7 +522,7 @@ def create_site_blueprint(service: GraderService) -> Blueprint:
         ledger = request_db().execute("SELECT change, balance, reason, created_at FROM ledger WHERE user_id = ? "
                                       "ORDER BY id DESC LIMIT 25", (g.user["id"],)).fetchall()
         return render_template("site/account.html", ledger=ledger, new_key=new_key, plan=accounts.plan_status(g.user),
-                               api_example=f"{base_url()}{url_for('site.api_grade')}?domain=example.com",
+                               account_info=account_summary(), api_example=f"{base_url()}{url_for('site.api_grade')}?domain=example.com",
                                active="account"), status
 
     @bp.get("/app/account")
@@ -502,8 +599,8 @@ def create_site_blueprint(service: GraderService) -> Blueprint:
         try:
             domain = check_domain_input(request.args.get("domain", ""))
             scan_id = run_paid_scan(conn, service, user, domain)
-        except NoCredits:
-            return jsonify(error="No checks left on this account. Buy credits or a plan."), 402
+        except NoCredits as exc:
+            return jsonify(error=str(exc)), 402
         except ScanRefused as exc:
             return jsonify(error=str(exc)), exc.status
         row = conn.execute("SELECT report_json FROM scans WHERE id = ?", (scan_id,)).fetchone()

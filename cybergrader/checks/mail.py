@@ -242,13 +242,19 @@ def check_dmarc(ctx) -> Outcome:
     domain = ctx.domain
     records, found_at = find_dmarc(ctx.dns, domain)
     if not records:
-        starter = f"v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@{domain}"
-        if not mail_setup(ctx).receives_mail:
-            starter = "v=DMARC1; p=reject"
+        if mail_setup(ctx).receives_mail:
+            fix = (f"Publish a TXT record at _dmarc.{domain}: \"v=DMARC1; p=none; rua=mailto:dmarc-reports@{domain}\". "
+                   "Check the reports for a few weeks to confirm your real senders pass SPF or DKIM, then change p=none "
+                   "to p=quarantine and finally to p=reject.")
+        else:
+            fix = (f"Publish a TXT record at _dmarc.{domain}: \"v=DMARC1; p=reject\". This domain receives no email, so it "
+                   "most likely sends none either and can reject spoofed mail straight away. If something does send email "
+                   "as this domain (a website form or newsletter service), start with \"v=DMARC1; p=none; "
+                   "rua=mailto:an-address-you-read\" instead, then move to p=reject once the reports show those senders pass.")
         return Outcome.fail(
             HIGH,
             "No DMARC record, so nothing tells receiving servers to reject email that fails SPF/DKIM. Spoofed mail from this domain gets delivered.",
-            f"Publish a TXT record at _dmarc.{domain}: \"{starter}\". Review the reports, then move to p=reject.",
+            fix,
         )
     if len(records) > 1:
         return Outcome.fail(

@@ -6,6 +6,18 @@
   <h1>Invoices</h1>
   <p class="lead">Every payment gets {{ 'a tax invoice' if site.vat_registered else 'an invoice' }}. Open one to print it or save it as a PDF.
     Add your company name, VAT number and address under <a href="{{ url_for('site.account') }}">Account</a> to have them shown on future invoices.</p>
+  {% if bills %}
+  <section class="panel">
+    <h2>Bills to pay</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Bill</th><th>Due</th><th class="num">Amount</th><th></th></tr></thead>
+      <tbody>{% for bill in bills %}
+        <tr><td class="wrap-cell">{{ bill.description }}</td>
+          <td>{{ bill.due_at|date }}{% if bill.due_at <= now.strftime('%Y-%m-%dT%H:%M:%SZ') %} <span class="tag tag-err">overdue</span>{% endif %}</td>
+          <td class="num">{{ money(bill.amount_cents) }}</td><td><a class="btn btn-small" href="{{ url_for('site.bill', ref=bill.ref) }}">Pay</a></td></tr>
+      {% endfor %}</tbody></table></div>
+  </section>
+  {% endif %}
   <section class="panel">
     {% if invoices %}
     <div class="table-wrap"><table>

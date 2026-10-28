@@ -1,8 +1,12 @@
 Hi {{ user.name }},
 
-Your {{ user.plan_name }} plan with {{ settings.business_name }} ends on {{ expires }}.{% if user.plan_scans_left is not none %} You have {{ user.plan_scans_left }} check{{ '' if user.plan_scans_left == 1 else 's' }} left on it.{% endif %}
+{% if ended -%}
+Your {{ user.plan_name }} plan with {{ settings.business_name }} ended on {{ expires }}. Renew it to carry on checking domains:
+{%- else -%}
+Your {{ user.plan_name }} plan with {{ settings.business_name }} ends on {{ expires }} (in {{ days_left }} day{{ '' if days_left == 1 else 's' }}).{% if user.plan_scans_left is not none %} You have {{ user.plan_scans_left }} check{{ '' if user.plan_scans_left == 1 else 's' }} left on it.{% endif %}
 
 Plans don't renew automatically. To keep checking domains, renew here (it adds another period on top of what's left):
+{%- endif %}
 {{ link }}
 
 Your credits, if you have any, aren't affected and never expire.

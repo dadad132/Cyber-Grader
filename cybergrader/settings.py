@@ -21,7 +21,8 @@ from .report import Branding
 
 DEFAULT_DATA_DIR = Path(__file__).resolve().parents[1] / "instance"
 MIN_PRICE_CENTS = 200  # Yoco doesn't accept payments under R2.00
-MAX_PACKS, MAX_PLANS = 5, 3
+MAX_PACKS, MAX_PLANS = 5, 6
+MAX_REMINDERS = 5
 
 
 class SettingsError(ValueError):
@@ -50,7 +51,7 @@ DEFAULT_TERMS = """These terms apply to your use of this website and its domain 
 
 2. Acceptable use. Only check domains you own, manage or have a legitimate reason to assess. Don't use the service to harass anyone or to break the law.
 
-3. Credits and plans. One credit pays for one check of one domain. Credits don't expire. A monthly plan gives the listed number of checks for 30 days from payment and doesn't renew automatically. Unused plan checks lapse when the plan ends.
+3. Credits, plans and monthly accounts. One credit pays for one check of one domain. Credits don't expire. A plan gives the listed number of checks for the listed number of days from payment and doesn't renew automatically. Unused plan checks lapse when the plan ends. A monthly account has a fixed monthly fee, paid in advance, and a price per check, billed at the end of each month. If a bill isn't paid by its due date the account is put on hold until it is. You can close a monthly account at any time; it closes on its next billing day, with a final bill for the checks used.
 
 4. Payments and refunds. Payments are processed by Yoco. A credit that has been used can't be refunded. If a payment went wrong or you bought something by mistake, contact us within 14 days and we'll make it right.
 
@@ -87,6 +88,8 @@ class Settings:
     # Scanning
     timeout: float = 6.0
     nameservers: list[str] = field(default_factory=list)
+    dnsbl_nameservers: list[str] = field(default_factory=list)  # for blacklist lookups, e.g. a local resolver 127.0.0.1:5335
+    spamhaus_dqs_key: str = ""  # Spamhaus Data Query Service key (spamhaus.com), needed for commercial volumes
     user_agent: str = ""
     # Abuse protection
     rate_limit: int = 10  # scans per account per 10 minutes
@@ -97,6 +100,15 @@ class Settings:
     charge_for_checks: bool = True  # off = every check, full report and PDF is free (no credits used)
     credit_packs: list[dict] = field(default_factory=_default_packs)
     plans: list[dict] = field(default_factory=_default_plans)
+    plan_reminder_days: list[int] = field(default_factory=lambda: [7, 3, 1])  # renewal emails, days before a plan ends
+    plan_ended_email: bool = True  # and one when it has ended
+    # Monthly account (pay after use): a fee up front each month, checks billed at the end of it
+    account_enabled: bool = False
+    account_name: str = "Monthly account"
+    account_fee_cents: int = 9900
+    account_check_cents: int = 3900
+    account_max_checks: int = 100  # per month, 0 = no limit; caps what anyone can run up before paying
+    account_grace_days: int = 3  # days to pay a bill before the account goes on hold
     # Yoco
     yoco_secret_key: str = ""
     yoco_webhook_id: str = ""
@@ -176,6 +188,8 @@ class Settings:
         for plan in self.plans:
             if plan.get("id") == product_id:
                 return {**plan, "kind": "plan"}
+        if product_id == "account" and self.account_enabled:
+            return {"id": "account", "kind": "account", "name": self.account_name, "price_cents": self.account_fee_cents}
         return None
 
 
@@ -217,8 +231,8 @@ class SettingsStore:
             if expected is float and isinstance(value, int) and not isinstance(value, bool):
                 value = float(value)
             if expected is list and isinstance(value, list):
-                item_type = dict if f.name in ("credit_packs", "plans") else str
-                value = [item for item in value if isinstance(item, item_type)]
+                item_type = dict if f.name in ("credit_packs", "plans") else int if f.name == "plan_reminder_days" else str
+                value = [item for item in value if isinstance(item, item_type) and not isinstance(item, bool)]
             # Ignore hand-edited values of the wrong type rather than crashing later.
             if isinstance(value, expected) and not (expected is not bool and isinstance(value, bool)):
                 setattr(settings, f.name, value)
@@ -331,6 +345,22 @@ def general_from_form(current: Settings, data: Mapping[str, str]) -> tuple[Setti
             ipaddress.ip_address(server)
         except ValueError:
             form.errors.append(f"DNS server '{server}' must be an IP address, e.g. 1.1.1.1.")
+    dnsbl_nameservers = current.dnsbl_nameservers
+    if "dnsbl_nameservers" in data:
+        dnsbl_nameservers = [part for part in re.split(r"[,;\s]+", data.get("dnsbl_nameservers") or "") if part]
+        for server in dnsbl_nameservers:
+            host, sep, port = server.rpartition(":")
+            try:
+                ipaddress.ip_address(host if sep and "." in host else server)
+                if sep and "." in host and not (port.isdigit() and 0 < int(port) < 65536):
+                    raise ValueError
+            except ValueError:
+                form.errors.append(f"Blacklist DNS server '{server}' must be an IP address, optionally with a port, e.g. 127.0.0.1:5335.")
+    spamhaus_key = current.spamhaus_dqs_key
+    if "spamhaus_dqs_key" in data:
+        spamhaus_key = form.text("spamhaus_dqs_key", "Spamhaus DQS key", 64).lower()
+        if spamhaus_key and not re.fullmatch(r"[a-z0-9]{16,40}", spamhaus_key):
+            form.errors.append("The Spamhaus DQS key should be the letters and digits from your Spamhaus account (about 26 characters).")
     user_agent = form.text("user_agent", "Scanner user agent", 200)
     if user_agent and not user_agent.isascii():
         form.errors.append("Scanner user agent may only contain plain ASCII characters.")
@@ -344,6 +374,8 @@ def general_from_form(current: Settings, data: Mapping[str, str]) -> tuple[Setti
         cta_text=form.text("cta_text", "Call-to-action text", 160),
         timeout=form.number("timeout", "Network timeout", float, 2, 30),
         nameservers=nameservers[:4],
+        dnsbl_nameservers=dnsbl_nameservers[:4],
+        spamhaus_dqs_key=spamhaus_key,
         user_agent=user_agent,
         rate_limit=form.number("rate_limit", "Scans per account", int, 1, 1000),
         max_concurrent=form.number("max_concurrent", "Simultaneous scans", int, 1, 32),
@@ -376,6 +408,22 @@ def payments_from_form(current: Settings, data: Mapping[str, str]) -> tuple[Sett
                       "days": form.number(f"plan_{i}_days", f"Plan {i + 1} length", int, 1, 366)})
     if not packs and not plans:
         form.errors.append("Offer at least one credit pack or plan.")
+    reminder_days = current.plan_reminder_days
+    if "plan_reminder_days" in data:
+        reminder_days = []
+        for part in re.split(r"[,\s]+", form.text("plan_reminder_days", "Reminder days", 60)):
+            if part and not (part.isdigit() and 1 <= int(part) <= 60):
+                form.errors.append("Reminder days should be whole numbers of days from 1 to 60, e.g. 7, 3, 1.")
+                break
+            if part:
+                reminder_days.append(int(part))
+        reminder_days = sorted(set(reminder_days), reverse=True)[:MAX_REMINDERS]
+    account_enabled = form.flag("account_enabled")
+
+    def account_value(read, name, current_value):
+        # Blank fields keep the saved value while the monthly account is switched off.
+        return read() if account_enabled or form.raw(name) else current_value
+
     updated = replace(
         current,
         yoco_secret_key=secret_key,
@@ -384,6 +432,18 @@ def payments_from_form(current: Settings, data: Mapping[str, str]) -> tuple[Sett
         charge_for_checks=form.flag("charge_for_checks"),
         credit_packs=packs,
         plans=plans,
+        plan_reminder_days=reminder_days,
+        plan_ended_email=form.flag("plan_ended_email"),
+        account_enabled=account_enabled,
+        account_name=form.text("account_name", "Monthly account name", 60) or current.account_name,
+        account_fee_cents=account_value(lambda: form.rands("account_fee", "Monthly account fee"), "account_fee",
+                                         current.account_fee_cents),
+        account_check_cents=account_value(lambda: form.rands("account_check", "Price per check on a monthly account"),
+                                          "account_check", current.account_check_cents),
+        account_max_checks=account_value(lambda: form.number("account_max_checks", "Monthly account check limit", int, 0, 100000),
+                                         "account_max_checks", current.account_max_checks),
+        account_grace_days=account_value(lambda: form.number("account_grace_days", "Days to pay a bill", int, 1, 30),
+                                         "account_grace_days", current.account_grace_days),
     )
     return updated, form.errors
 

@@ -192,6 +192,21 @@ def test_report_pdf_download(app):
     assert response.mimetype == "application/pdf" and response.data.startswith(b"%PDF")
 
 
+def test_pdf_prepared_for_can_be_changed_or_hidden(app, monkeypatch):
+    from cybergrader import site
+
+    client = app.test_client()
+    signup(client)
+    report_url = client.post("/app/scan", data={"csrf": csrf_from(client, "/app"), "domain": "example.com"}).location
+    assert 'name="prepared_for" value="Example Ltd"' in client.get(report_url).get_data(as_text=True)
+    seen = []
+    monkeypatch.setattr(site, "report_pdf", lambda report, branding, **kw: seen.append(kw["recipient"]) or b"%PDF-fake")
+    client.get(report_url + "/pdf")  # plain link (e.g. from the Clients page): the default
+    client.get(report_url + "/pdf?prepared_for=  Multi   IT ")
+    client.get(report_url + "/pdf?prepared_for=")  # blank: no "Prepared for" line at all
+    assert seen == ["Example Ltd", "Multi IT", ""]
+
+
 # --- building network audits -------------------------------------------------------------------------
 
 def test_lan_scores_only_what_was_measured():

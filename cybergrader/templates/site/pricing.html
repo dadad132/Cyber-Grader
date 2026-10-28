@@ -4,7 +4,7 @@
 {% block content %}
 <main class="wrap page">
   <h1>Pricing</h1>
-  <p class="lead">One credit is one check of one domain. Buy credits as you need them, or take a monthly plan if you check domains regularly.
+  <p class="lead">One credit is one check of one domain. Buy credits as you need them, or take a monthly plan if you check domains regularly{% if products.account %}, or open a {{ site.account_name|lower }} and pay at the end of each month for the checks you used{% endif %}.
     {% if site.signup_credits %}New accounts get {{ site.signup_credits }} free check{{ '' if site.signup_credits == 1 else 's' }}.{% endif %}</p>
   {{ ui.price_cards(products, current_user is not none, site.payments_ready) }}
 </main>

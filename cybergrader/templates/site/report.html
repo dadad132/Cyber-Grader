@@ -7,7 +7,10 @@
   <form method="post" action="{{ url_for('site.scan') }}" data-busy="Checking…">{{ csrf_field() }}
     <input type="hidden" name="domain" value="{{ report.domain }}"><input type="hidden" name="again" value="1">
     <button class="btn btn-small" type="submit">Check again (1 check)</button></form>
-  <a class="btn btn-secondary btn-small" href="{{ url_for('site.report_pdf_download', scan_id=scan.id) }}">Download PDF</a>
+  <form class="toolbar-form" method="get" action="{{ url_for('site.report_pdf_download', scan_id=scan.id) }}">
+    <input name="prepared_for" value="{{ prepared_for }}" maxlength="80" placeholder="Prepared for (blank = hide)"
+           aria-label="Prepared for, shown on the PDF (leave blank to hide it)" title="Shown on the PDF as &quot;Prepared for …&quot;. Leave blank to hide it.">
+    <button class="btn btn-secondary btn-small" type="submit">Download PDF</button></form>
   <a class="btn btn-secondary btn-small" href="{{ url_for('site.download_report', scan_id=scan.id) }}">HTML</a>
   <button class="btn btn-secondary btn-small" type="button" data-print>Print</button>
 </div>

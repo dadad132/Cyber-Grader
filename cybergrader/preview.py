@@ -27,7 +27,7 @@ from .pdf import PdfUnavailable, report_pdf
 from .report import VERDICTS, report_body
 from .security import csrf_ok
 from .service import GraderService, RateLimiter, ScanRefused, check_domain_input
-from .site import NoCredits, run_paid_scan
+from .site import NoCredits, charge_check, run_paid_scan
 
 REUSE_MINUTES = 60        # a recent check of the same domain is reused instead of re-scanning
 UNLOCK_HOURS = 24         # older previews are re-checked when unlocked with a credit
@@ -160,14 +160,12 @@ def create_preview_blueprint(service: GraderService) -> Blueprint:
             if parse_iso(row["created_at"]) < utcnow() - timedelta(hours=UNLOCK_HOURS):
                 scan_id = run_paid_scan(conn, service, g.user, row["domain"])  # too old: check again
             else:
-                method = accounts.charge_for_scan(conn, g.user["id"], row["domain"],
-                                                  free=not store.current.charge_for_checks)
-                if method is None:
-                    raise NoCredits()
-                scan_id = accounts.record_scan(conn, g.user["id"], Report.from_dict(json.loads(row["report_json"])), method)
-        except NoCredits:
-            flash("You're out of checks. Buy credits or a monthly plan to unlock full reports.", "err")
-            return redirect(url_for("site.buy"))
+                method, price = charge_check(conn, store.current, g.user, row["domain"])
+                scan_id = accounts.record_scan(conn, g.user["id"], Report.from_dict(json.loads(row["report_json"])), method,
+                                               price)
+        except NoCredits as exc:
+            flash(str(exc), "err")
+            return redirect(url_for("site.bill", ref=exc.bill_ref) if exc.bill_ref else url_for("site.buy"))
         except ScanRefused as exc:
             flash(f"{row['domain']}: {exc} You haven't been charged.", "err")
             return redirect(url_for("preview.show", token=token))

@@ -90,7 +90,8 @@ class GraderService:
             raise ScanRefused("The grader is very busy right now. Please try again in a minute.", 503)
         try:
             return grade_domain(domain, timeout=settings.timeout, nameservers=settings.nameservers or None,
-                                allow_private=False, user_agent=settings.user_agent or DEFAULT_USER_AGENT)
+                                allow_private=False, user_agent=settings.user_agent or DEFAULT_USER_AGENT,
+                                dnsbl_nameservers=settings.dnsbl_nameservers or None, spamhaus_key=settings.spamhaus_dqs_key)
         except (ValueError, BlockedTarget) as exc:
             raise ScanRefused(str(exc), 400) from exc
         except Inconclusive as exc:

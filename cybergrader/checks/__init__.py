@@ -13,7 +13,8 @@ EMAIL = "Email Security"
 TLS = "HTTPS & TLS"
 HEADERS = "Web Security Headers"
 DOMAIN = "Domain & DNS"
-CATEGORIES = (EMAIL, TLS, HEADERS, DOMAIN)
+REPUTATION = "Blacklists & Reputation"
+CATEGORIES = (EMAIL, REPUTATION, TLS, HEADERS, DOMAIN)
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,6 @@ def check(check_id: str, category: str, title: str, max_points: float = 0.0):
 
 
 def all_checks() -> list[CheckSpec]:
-    from . import domain, mail, tls, web  # noqa: F401  (importing registers the checks)
+    from . import domain, mail, reputation, smtp, tls, web  # noqa: F401  (importing registers the checks)
 
     return sorted(_REGISTRY, key=lambda spec: CATEGORIES.index(spec.category))

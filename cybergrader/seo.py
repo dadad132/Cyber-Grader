@@ -153,6 +153,27 @@ TOOLS = {
             ("Is security.txt required?", "No, but it's a simple, recommended way to receive vulnerability reports instead of having them ignored or made public."),
         ],
     },
+    "blacklist-check": {
+        "phrase": "blacklist check",
+        "nav": "Blacklist check",
+        "title": "Blacklist Check: Is Your Domain or Mail Server Listed?",
+        "h1": "Email blacklist check",
+        "description": "Free blacklist check: is your mail server or domain on Spamhaus, Barracuda, SpamCop, SURBL, URIBL or other spam blacklists? Includes removal steps.",
+        "lede": "If your emails suddenly land in spam or bounce, a blacklist is the usual reason. This check looks up your mail servers and your domain on the blocklists that mail filters actually use.",
+        "sections": [
+            ("What the blacklist check covers",
+             "We find your own mail servers (from your MX and SPF records) and look each address up on Spamhaus ZEN, Barracuda, SpamCop, UCEPROTECT, PSBL, Mailspike, blocklist.de, 0spam and GBUdb. Your domain itself is checked on the Spamhaus Domain Block List, SURBL and URIBL, which flag domains used in spam, phishing and malware. We also check that your mail servers have reverse DNS (PTR), which Gmail and Microsoft expect."),
+            ("Why you can trust the result",
+             "Blacklists answer some lookups with codes that look like listings but really mean \"refused\", for example when the lookup comes through a public DNS service. Many free checkers report those as listings and scare people for nothing. We check every answer against each list's documented codes and test each list before trusting it, so a list that won't answer is shown as \"couldn't check\", never as a listing."),
+            ("How to get removed from a blacklist",
+             "First find what caused it: usually a mailbox with a stolen password, a website form or plugin sending spam, or an infected computer. Fix that, then use the removal link in the report for each list. Many lists drop an address by themselves a few days after the spam stops. If your hosting company's whole network is listed, only the host can fix it, and moving hosts may be quicker."),
+        ],
+        "faqs": [
+            ("Why are my emails going to spam?", "The usual causes are a blacklisted mail server or domain, missing SPF, DKIM or DMARC, or a mail server without reverse DNS. The full domain health check tests all of them at once."),
+            ("Is the blacklist check free?", "Yes. You see your grade and how many problems there are for free; the details and removal links unlock with a credit, or free if you verify that you own the domain."),
+            ("We use Google Workspace or Microsoft 365. Can we be blacklisted?", "Their servers are managed by Google and Microsoft, so we don't check them, but your domain can still be listed if it appears in spam or phishing, and so can any website or server that sends mail for you."),
+        ],
+    },
 }
 
 

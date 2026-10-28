@@ -12,13 +12,21 @@ from cybergrader.net import HttpResult  # noqa: E402
 class FakeDNS:
     """In-memory stand-in for DNSClient."""
 
-    def __init__(self, txt=None, mx=None, caa=None, ds=(), zone=None, addresses=None):
+    def __init__(self, txt=None, mx=None, caa=None, ds=(), zone=None, addresses=None, a=None, ptr=None):
         self.txt_records = txt or {}
         self.mx_records = mx or {}
         self.caa_records = caa or {}
         self.ds_zones = set(ds)
         self.zone = zone
         self.address_records = addresses or {}
+        self.a_records = a or {}
+        self.ptr_records = ptr or {}
+
+    def ipv4(self, name):
+        return list(self.a_records.get(name, []))
+
+    def ptr(self, ip):
+        return list(self.ptr_records.get(ip, []))
 
     def txt(self, name):
         return list(self.txt_records.get(name, []))
@@ -116,3 +124,4 @@ def _no_real_email(monkeypatch):
     monkeypatch.setattr("cybergrader.leads.send_later", lambda *args, **kwargs: None)
     monkeypatch.setattr("cybergrader.preview.send_later", lambda *args, **kwargs: None)
     monkeypatch.setattr("cybergrader.clients.send_later", lambda *args, **kwargs: None)
+    monkeypatch.setattr("cybergrader.admin.send_later", lambda *args, **kwargs: None)

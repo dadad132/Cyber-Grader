@@ -29,6 +29,29 @@
           {% if plan.active %}<button class="btn btn-danger" type="submit" name="action" value="end">End plan now</button>{% endif %}</div></form></section>
   </div>
 
+  <section class="panel"><h2>{{ site.account_name }}</h2>
+    {% if account_info.open %}
+    <dl class="kv">
+      <dt>Status</dt><dd>{% if account_info.on_hold %}<span class="tag tag-err">on hold</span> bill of {{ money(account_info.overdue.amount_cents) }} overdue since {{ account_info.overdue.due_at|date }}
+        {% elif account_info.closing %}<span class="tag tag-warn">closing</span> on {{ account_info.period_end|date }}{% else %}<span class="tag tag-ok">active</span>{% endif %}</dd>
+      <dt>This month</dt><dd>{{ account_info.period_start|date }} to {{ account_info.period_end|date }} (next bill)</dd>
+      <dt>Not billed yet</dt><dd>{{ account_info.checks }} check{{ '' if account_info.checks == 1 else 's' }}, {{ money(account_info.owed_cents) }}{% if account_info.limit_reached %} · <strong>monthly limit reached</strong>{% endif %}</dd>
+      <dt>Unpaid bills</dt><dd>{{ account_info.bills|length }}{% if account_info.bills %} ({{ money(account_info.bills|sum(attribute='amount_cents')) }}) · see Payments below; use <em>Mark paid</em> on the Payments page for EFTs{% endif %}</dd>
+    </dl>
+    <form method="post" action="{{ url_for('admin.user_account', user_id=user.id) }}" class="actions" style="margin-top:12px">{{ csrf_field() }}
+      <button class="btn btn-secondary" type="submit" name="action" value="bill">Bill now</button>
+      {% if account_info.closing %}<button class="btn btn-secondary" type="submit" name="action" value="keep">Keep open</button>
+      {% else %}<button class="btn btn-danger" type="submit" name="action" value="close">Close at next billing day</button>{% endif %}
+    </form>
+    <p class="help">Bill now ends this month today and issues the bill straight away (for example to settle up early, or to try the flow).</p>
+    {% else %}
+    <p class="sub">{{ 'Closed.' if account_info.status == 'closed' else 'Not opened.' }}{% if account_info.bills %} {{ account_info.bills|length }} unpaid bill(s) remain.{% endif %}</p>
+    <form method="post" action="{{ url_for('admin.user_account', user_id=user.id) }}">{{ csrf_field() }}
+      <button class="btn btn-secondary" type="submit" name="action" value="open">Open without payment</button></form>
+    <p class="help">Starts a monthly account today without the opening fee or an invoice (e.g. for a trusted client). Bills follow monthly as usual.</p>
+    {% endif %}
+  </section>
+
   <div class="grid2">
     <section class="panel"><h2>Set a new password</h2><p class="sub">For customers who can't use the email reset.</p>
       <form method="post" action="{{ url_for('admin.user_password', user_id=user.id) }}">{{ csrf_field() }}

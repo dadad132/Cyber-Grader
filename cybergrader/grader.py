@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from ._version import __version__
 from .checks import CATEGORIES, CheckSpec, all_checks
 from .context import DEFAULT_USER_AGENT, ScanContext
+from .dnsbl import DnsblClient
 from .dnsutil import DNSClient, Inconclusive
 from .models import CategoryScore, CheckResult, NotApplicable, NotTested, Outcome, Report, Severity, Status
 from .target import BlockedTarget, display_name, is_public_ip, normalize_domain
@@ -24,11 +25,14 @@ MIN_COVERAGE = 0.8
 
 
 def grade_domain(domain: str, *, timeout: float = 6.0, nameservers: list[str] | None = None,
-                 allow_private: bool = True, user_agent: str = DEFAULT_USER_AGENT, workers: int = 12) -> Report:
-    """Grade a domain. Raises ValueError for bad/non-existent domains, BlockedTarget, or Inconclusive."""
+                 allow_private: bool = True, user_agent: str = DEFAULT_USER_AGENT, workers: int = 12,
+                 dnsbl_nameservers: list[str] | None = None, spamhaus_key: str = "") -> Report:
+    """Grade a domain. Raises ValueError for bad/non-existent domains, BlockedTarget, or Inconclusive.
+    Blacklists are queried through dnsbl_nameservers (default: the same as nameservers)."""
     name = normalize_domain(domain)
+    dnsbl = DnsblClient(dnsbl_nameservers or nameservers, timeout=min(timeout, 4.0), spamhaus_key=spamhaus_key)
     ctx = ScanContext(name, DNSClient(nameservers, timeout=min(timeout, 5.0)), timeout=timeout,
-                      allow_private=allow_private, user_agent=user_agent)
+                      allow_private=allow_private, user_agent=user_agent, dnsbl=dnsbl)
     started_at = datetime.now(timezone.utc)
     clock = time.monotonic()
     _preflight(ctx)

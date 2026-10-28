@@ -119,6 +119,24 @@ chmod 755 /usr/local/bin/cybergrader-manage
 say "Configuring the site address"
 cybergrader-manage configure --site-url "https://$DOMAIN" --trust-proxy
 
+say "Setting up a private DNS resolver for blacklist checks"
+# Spamhaus and URIBL refuse lookups relayed through big public resolvers, so blacklist lookups go through unbound
+# on this server. It only listens on 127.0.0.1; the server's own DNS settings aren't changed.
+DNSBL_RESOLVER=""
+if dnf -y -q install unbound &>/dev/null && systemctl enable -q --now unbound &>/dev/null; then
+  for _ in $(seq 1 15); do
+    if "$APP_DIR/venv/bin/python" -c 'import dns.resolver as d; r = d.Resolver(configure=False); r.nameservers = ["127.0.0.1"]; r.lifetime = 5; r.resolve("2.0.0.127.bl.spamcop.net", "A")' &>/dev/null; then
+      DNSBL_RESOLVER=127.0.0.1; break
+    fi
+    sleep 1
+  done
+fi
+if [[ -n $DNSBL_RESOLVER ]]; then
+  cybergrader-manage configure --dnsbl-resolver "$DNSBL_RESOLVER"
+else
+  warn "The local resolver (unbound) didn't start, so blacklist checks use the server's normal DNS. Spamhaus may refuse some lookups; reports show those lists as 'couldn't check'."
+fi
+
 if ! grep -q '"admin_password_hash": "[^"]' "$DATA_DIR/settings.json" 2>/dev/null; then
   say "Choose the super-admin password (you'll sign in at https://$DOMAIN/admin/ with it)"
   if [[ -t 0 ]]; then

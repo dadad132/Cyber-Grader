@@ -2,11 +2,12 @@
 
     python -m cybergrader.manage set-admin-password          # prompt for the super-admin password
     python -m cybergrader.manage configure --site-url https://grader.example.co.za --trust-proxy
-    python -m cybergrader.manage send-reminders              # email customers whose plan ends within 3 days
+    python -m cybergrader.manage send-reminders              # plan renewal reminders (days set under Payments & pricing)
+    python -m cybergrader.manage bill-accounts               # monthly account bills, reminders and on-hold notices
     python -m cybergrader.manage add-credits someone@example.com 10 --reason "Promo"
     python -m cybergrader.manage status                      # the go-live checklist
     python -m cybergrader.manage backup /root/grader-backup.db
-    python -m cybergrader.manage daily                       # reminders + rotating backups (run by a systemd timer)
+    python -m cybergrader.manage daily                       # bills, reminders + rotating backups (run by a systemd timer)
 
 Set GRADER_DATA_DIR to the data folder (the installer uses /var/lib/cybergrader).
 """
@@ -17,20 +18,20 @@ import getpass
 import secrets
 import sqlite3
 import sys
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from flask import Flask, render_template
 from werkzeug.security import generate_password_hash
 
-from . import accounts
+from . import accounts, postpaid
 from .admin import go_live_checklist
 from .billing import money
 from .db import connect, iso, migrate, parse_iso, utcnow
 from .mailer import MailError, send_mail
 from .settings import SettingsStore
 
-REMINDER_DAYS = 3
+ENDED_NOTICE_DAYS = 7  # "your plan has ended" only goes out for plans that ended this recently
 
 
 def _db(store: SettingsStore) -> sqlite3.Connection:
@@ -73,6 +74,8 @@ def configure(store: SettingsStore, args) -> int:
         changes["brand_name"] = args.brand
     if args.contact_email:
         changes["contact_email"] = args.contact_email
+    if args.dnsbl_resolver is not None:
+        changes["dnsbl_nameservers"] = [args.dnsbl_resolver] if args.dnsbl_resolver else []
     store.ensure_secret_key()
     if changes:
         store.update(**changes)
@@ -80,36 +83,96 @@ def configure(store: SettingsStore, args) -> int:
     return 0
 
 
+def _templates() -> Flask:
+    return Flask(__name__.rsplit(".", 1)[0])  # just for rendering email templates outside the website
+
+
+def _stage_rank(stage: str) -> int:
+    return 0 if stage == "ended" else int(stage)  # lower = more urgent
+
+
+def reminder_stage(expires: datetime, now: datetime, days: list[int], ended_email: bool, sent_for: str | None) -> str | None:
+    """Which renewal email a plan ending at `expires` needs now: a number of days before ('7', '3', '1'), 'ended',
+    or None. sent_for records the last one sent as '<expiry>|<stage>' (or just '<expiry>' from older versions)."""
+    if expires <= now:
+        stage = "ended" if ended_email and now - expires <= timedelta(days=ENDED_NOTICE_DAYS) else None
+    else:
+        stage = next((str(d) for d in sorted(days) if expires - now <= timedelta(days=d)), None)
+    if stage is None:
+        return None
+    sent_expiry, _, sent_stage = (sent_for or "").partition("|")
+    if sent_expiry == iso(expires) and _stage_rank(sent_stage or "3") <= _stage_rank(stage):
+        return None  # this one (or a more urgent one) already went out for this plan period
+    return stage
+
+
 def send_reminders(store: SettingsStore, _args) -> int:
+    """Plan renewal emails: on each of the configured days before a plan ends, and once after it has ended."""
     settings = store.current
     conn = _db(store)
     now = utcnow()
-    soon = iso(now + timedelta(days=REMINDER_DAYS))
-    rows = conn.execute(
-        "SELECT * FROM users WHERE disabled = 0 AND plan_expires_at > ? AND plan_expires_at <= ? "
-        "AND (reminder_sent_for IS NULL OR reminder_sent_for != plan_expires_at)", (iso(now), soon)).fetchall()
-    if not rows:
-        print("No plans ending soon.")
+    since = now - timedelta(days=ENDED_NOTICE_DAYS) if settings.plan_ended_email else now
+    until = now + timedelta(days=max(settings.plan_reminder_days, default=0))
+    due = []
+    for user in conn.execute("SELECT * FROM users WHERE disabled = 0 AND plan_expires_at > ? AND plan_expires_at <= ?",
+                             (iso(since), iso(until))).fetchall():
+        stage = reminder_stage(parse_iso(user["plan_expires_at"]), now, settings.plan_reminder_days,
+                               settings.plan_ended_email, user["reminder_sent_for"])
+        if stage:
+            due.append((user, stage))
+    if not due:
+        print("No plan reminders due.")
         return 0
     if not settings.email_ready:
-        print(f"{len(rows)} plan(s) end soon, but email isn't set up, so no reminders were sent.", file=sys.stderr)
+        print(f"{len(due)} plan reminder(s) due, but email isn't set up, so none were sent.", file=sys.stderr)
         return 1
-    app = Flask(__name__.rsplit(".", 1)[0])  # just for rendering the email template
     base = settings.site_url.rstrip("/")
     sent = 0
-    for user in rows:
-        with app.app_context():
-            text = render_template("email/reminder.txt", user=user, settings=settings,
-                                   expires=parse_iso(user["plan_expires_at"]).strftime("%d %b %Y"), link=f"{base}/app/buy")
+    for user, stage in due:
+        expires = parse_iso(user["plan_expires_at"])
+        with _templates().app_context():
+            text = render_template("email/reminder.txt", user=user, settings=settings, expires=expires.strftime("%d %b %Y"),
+                                   ended=stage == "ended", days_left=max(1, round((expires - now) / timedelta(days=1))),
+                                   link=f"{base}/app/buy?renew={user['plan_id']}")
+        subject = (f"Your {user['plan_name']} plan has ended" if stage == "ended"
+                   else f"Your {user['plan_name']} plan ends on {expires:%d %b}")
         try:
-            send_mail(settings, user["email"], f"Your {user['plan_name']} plan ends soon", text)
+            send_mail(settings, user["email"], subject, text)
         except MailError as exc:
             print(exc, file=sys.stderr)
             continue
-        conn.execute("UPDATE users SET reminder_sent_for = plan_expires_at WHERE id = ?", (user["id"],))
+        conn.execute("UPDATE users SET reminder_sent_for = ? WHERE id = ?", (f"{user['plan_expires_at']}|{stage}", user["id"]))
         sent += 1
-    print(f"Sent {sent} reminder(s).")
-    return 0 if sent == len(rows) else 1
+    print(f"Sent {sent} plan reminder(s).")
+    return 0 if sent == len(due) else 1
+
+
+def bill_accounts(store: SettingsStore, _args) -> int:
+    """Monthly accounts: issue the bills whose billing day has come, then email bills, reminders and on-hold notices."""
+    settings = store.current
+    conn = _db(store)
+    bills = postpaid.issue_bills(conn, settings)
+    print(f"Issued {len(bills)} monthly bill(s).")
+    due = postpaid.notices_due(conn)
+    if not due:
+        return 0
+    if not settings.email_ready:
+        print(f"{len(due)} bill email(s) due, but email isn't set up, so none were sent.", file=sys.stderr)
+        return 1
+    base = settings.site_url.rstrip("/")
+    sent = 0
+    for bill, stage in due:
+        with _templates().app_context():
+            subject, text = postpaid.bill_email(settings, bill, stage, f"{base}/app/bills/{bill['ref']}")
+        try:
+            send_mail(settings, bill["email"], subject, text)
+        except MailError as exc:
+            print(exc, file=sys.stderr)
+            continue
+        conn.execute("UPDATE orders SET notice = ? WHERE id = ?", (stage, bill["id"]))
+        sent += 1
+    print(f"Sent {sent} bill email(s).")
+    return 0 if sent == len(due) else 1
 
 
 def add_credits(store: SettingsStore, args) -> int:
@@ -148,7 +211,9 @@ def backup(store: SettingsStore, args) -> int:
 
 
 def daily(store: SettingsStore, args) -> int:
-    """Daily housekeeping: plan reminders, clearing out old free checks, then a dated database backup (keeping 14)."""
+    """Daily housekeeping: monthly bills, plan reminders, clearing out old free checks, then a dated database backup
+    (keeping 14)."""
+    bills_ok = bill_accounts(store, args) == 0 or not store.current.email_ready
     reminders_ok = send_reminders(store, args) == 0 or not store.current.email_ready
     conn = _db(store)
     old_previews = iso(utcnow() - timedelta(days=30))
@@ -160,7 +225,7 @@ def daily(store: SettingsStore, args) -> int:
     backup(store, argparse.Namespace(destination=str(folder / f"grader-{utcnow():%Y-%m-%d}.db")))
     for old in sorted(folder.glob("grader-*.db"))[:-14]:
         old.unlink()
-    return 0 if reminders_ok else 1
+    return 0 if reminders_ok and bills_ok else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -175,8 +240,10 @@ def main(argv: list[str] | None = None) -> int:
     cfg.add_argument("--trust-proxy", action="store_true")
     cfg.add_argument("--brand")
     cfg.add_argument("--contact-email")
+    cfg.add_argument("--dnsbl-resolver", help="DNS server for blacklist lookups, e.g. 127.0.0.1:5335 ('' = same as scans)")
     cfg.set_defaults(func=configure)
     commands.add_parser("send-reminders", help="email customers whose plan ends soon").set_defaults(func=send_reminders)
+    commands.add_parser("bill-accounts", help="issue monthly account bills and send bill emails").set_defaults(func=bill_accounts)
     credits = commands.add_parser("add-credits", help="give (or with a negative number, take) credits")
     credits.add_argument("email")
     credits.add_argument("count", type=int)
@@ -186,7 +253,7 @@ def main(argv: list[str] | None = None) -> int:
     bk = commands.add_parser("backup", help="make a safe copy of the database")
     bk.add_argument("destination")
     bk.set_defaults(func=backup)
-    commands.add_parser("daily", help="send reminders and make a rotating backup").set_defaults(func=daily)
+    commands.add_parser("daily", help="bills, reminders and a rotating backup").set_defaults(func=daily)
     args = parser.parse_args(argv)
     return args.func(SettingsStore(), args)
 

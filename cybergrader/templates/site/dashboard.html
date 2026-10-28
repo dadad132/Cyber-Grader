@@ -6,30 +6,45 @@
   <h1>Hi {{ current_user.name.split(' ')[0] }}</h1>
   <p class="lead">Check a domain to see its security grade and a prioritised fix list.</p>
 
+  {% if account_info.on_hold %}
+  <p class="flash flash-err">Your {{ site.account_name|lower }} is on hold: the bill of {{ money(account_info.overdue.amount_cents) }} was due on {{ account_info.overdue.due_at|date }}.
+    <a href="{{ url_for('site.bill', ref=account_info.overdue.ref) }}">Pay it now</a> to carry on checking.</p>
+  {% elif account_info.bills %}{% set bill = account_info.bills[0] %}
+  <p class="flash flash-warn">Your {{ site.account_name|lower }} bill of {{ money(bill.amount_cents) }} is due on {{ bill.due_at|date }}. <a href="{{ url_for('site.bill', ref=bill.ref) }}">View and pay</a></p>
+  {% endif %}
   {% if plan.active and plan.days_left <= 3 %}
-  <p class="flash flash-warn">Your {{ plan.name }} plan ends on {{ plan.expires_at|date }}. <a href="{{ url_for('site.buy') }}">Renew it</a> to keep your checks.</p>
+  <p class="flash flash-warn">Your {{ plan.name }} plan ends on {{ plan.expires_at|date }}. <a href="{{ url_for('site.buy', renew=current_user.plan_id) }}">Renew it</a> to keep your checks.</p>
   {% endif %}
 
   <div class="stats">
     <div class="stat"><span>Credits</span><strong>{{ current_user.credits }}</strong><small>Never expire</small></div>
-    <div class="stat"><span>Monthly plan</span>
+    <div class="stat"><span>Plan</span>
       {% if plan.active %}<strong>{{ 'Unlimited' if plan.unlimited else plan.scans_left }}</strong><small>{{ plan.name }} · checks left until {{ plan.expires_at|date }}</small>
-      {% elif plan.expired %}<strong>Ended</strong><small>{{ plan.name }} ended {{ plan.expires_at|date }} · <a href="{{ url_for('site.buy') }}">Renew</a></small>
+      {% elif plan.expired %}<strong>Ended</strong><small>{{ plan.name }} ended {{ plan.expires_at|date }} · <a href="{{ url_for('site.buy', renew=current_user.plan_id) }}">Renew</a></small>
       {% else %}<strong>None</strong><small><a href="{{ url_for('site.buy') }}">See plans</a></small>{% endif %}</div>
+    {% if account_info.open %}
+    <div class="stat"><span>{{ site.account_name }}</span><strong>{{ account_info.checks }}{% if account_info.limit %} / {{ account_info.limit }}{% endif %}</strong>
+      <small>checks this month ({{ money(account_info.owed_cents) }}) · billed {{ account_info.period_end|date }}</small></div>
+    {% endif %}
     <div class="stat"><span>Checks run</span><strong>{{ scans|length }}</strong><small>Reports are kept in your account</small></div>
   </div>
 
   <section class="panel">
     <h2>Check a domain</h2>
-    {% if site.charge_for_checks %}<p class="sub">Uses {{ 'one of your plan checks' if plan.active else 'one credit' }}. If the check can't run, you aren't charged.</p>
-    {% else %}<p class="sub">Checks are free at the moment: the full report and PDF don't use a credit.</p>{% endif %}
-    {% if not site.charge_for_checks or plan.active or current_user.credits > 0 %}
+    {% if not site.charge_for_checks %}<p class="sub">Checks are free at the moment: the full report and PDF don't use a credit.</p>
+    {% else %}<p class="sub">Uses {{ 'one of your plan checks' if plan.active else 'one credit' if current_user.credits > 0
+      else 'your ' ~ site.account_name|lower ~ ' (' ~ money(site.account_check_cents) ~ " on this month's bill)" if account_info.usable
+      else 'one credit' }}. If the check can't run, you aren't charged.</p>{% endif %}
+    {% if not site.charge_for_checks or plan.active or current_user.credits > 0 or account_info.usable %}
     <form class="scanbox" method="post" action="{{ url_for('site.scan') }}" data-busy="Checking… (about 10 seconds)">{{ csrf_field() }}
       <input name="domain" type="text" inputmode="url" spellcheck="false" autocomplete="off" required placeholder="yourbusiness.co.za" aria-label="Domain to check" value="{{ prefill }}">
       <button class="btn btn-lg" type="submit">Check domain</button>
     </form>
-    {% else %}
-    <p class="flash flash-info">You've used all your checks. <a href="{{ url_for('site.buy') }}">Buy credits or a monthly plan</a> to keep going.</p>
+    {% elif account_info.open and account_info.limit_reached and not account_info.on_hold %}
+    <p class="flash flash-info">You've used this month's {{ account_info.limit }} checks on your {{ site.account_name|lower }}. The limit resets on
+      {{ account_info.period_end|date }}; <a href="{{ url_for('site.buy') }}">buy credits</a> if you need more before then.</p>
+    {% elif not account_info.on_hold %}
+    <p class="flash flash-info">You've used all your checks. <a href="{{ url_for('site.buy') }}">Buy credits or a plan</a> to keep going.</p>
     {% endif %}
   </section>
 

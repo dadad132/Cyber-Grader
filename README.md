@@ -28,7 +28,8 @@ The installer asks you to choose the super-admin password, then sets up:
 - Python, the app in `/opt/cybergrader` and a systemd service;
 - nginx and a free Let's Encrypt certificate (renewed automatically);
 - the firewall and SELinux;
-- a daily job that emails plan reminders and keeps 14 days of database backups.
+- a private DNS resolver (unbound, on 127.0.0.1 only) for blacklist lookups;
+- a daily job that issues monthly account bills, emails bill and plan reminders, and keeps 14 days of database backups.
 
 When it finishes, open `https://grader.yourdomain.co.za/admin/` and work through the **go-live checklist**
 on the dashboard:
@@ -37,7 +38,7 @@ on the dashboard:
 |---|---|
 | Website & scanning | Business name, contact email and phone |
 | Invoices & tax | Registered name, address, company reg. no., VAT registration and VAT number |
-| Payments & pricing | Your **Yoco secret key**, then click **Register webhook with Yoco**. Also set credit-pack and plan prices and free sign-up credits. |
+| Payments & pricing | Your **Yoco secret key**, then click **Register webhook with Yoco**. Also set credit-pack and plan prices, renewal reminder days, free sign-up credits and (optionally) the monthly account's fee, price per check, limit and days to pay. |
 | Email | Your SMTP server, which sends invoices, password resets and plan reminders. Send a test email. |
 | Legal pages | Review the starter terms and privacy policy, ideally with your legal adviser |
 
@@ -67,8 +68,19 @@ rate limits would treat them as one visitor. Switch the record to *DNS only*, or
 - **How a payment works:** the customer picks a pack or plan, pays on Yoco's hosted checkout page and returns to the site.
   The order is only marked paid when Yoco's signed webhook arrives. We verify its HMAC signature and timestamp, and check the amount matches.
 - **Delivery:** credits or the plan are then added, and an invoice is issued and emailed. Webhook retries can't double-credit an order.
-- **Monthly plans:** Yoco has no recurring billing, so a plan is bought for 30 days (or the length you set). Customers get a
-  reminder email 3 days before it ends with a one-click renew link. Renewing early adds the days and checks on top.
+- **Plans (up to 6):** Yoco has no recurring billing, so a plan is bought for the number of days you set (30 for monthly,
+  90 for quarterly, 365 for yearly). Customers get renewal emails on the days you choose (7, 3 and 1 days before by default)
+  and one after it has ended, each with a link straight to renewing that plan. Renewing early adds the days and checks on top.
+- **Monthly accounts (pay after use):** switch them on under *Payments & pricing*. The customer pays your monthly fee up front
+  to open the account, then checks and downloads reports during the month; checks they run with no credits or plan checks
+  left go on the account at your price per check. On the same day each month they get one itemised bill: that month's
+  checks plus next month's fee. Bills are due within the days you set (3 by default), with a reminder the day before. An
+  unpaid bill puts the account **on hold**, so checks on it stop until it's paid; paying (by card, or *Mark paid* for an EFT)
+  takes it off hold straight away. A monthly check limit caps what anyone can run up before paying. Customers can close the
+  account under *Account*; it closes on its next billing day with a final bill for the checks used and no new fee. In the
+  admin portal, each customer's page shows their account and has **Open without payment**, **Bill now** and **Close**.
+- **Bills and reminders are sent by the daily job** at 07:00 (`cybergrader-manage daily`, set up by the installer). To run
+  it by hand: `cybergrader-manage bill-accounts` or `cybergrader-manage send-reminders`.
 - **Missed webhooks:** if a payment shows in the Yoco app but is still pending here, use **Payments › Mark paid**.
   That delivers what was bought and issues the invoice. The same button works for EFTs you receive directly.
 
@@ -83,7 +95,8 @@ rate limits would treat them as one visitor. Switch the record to *DNS only*, or
 ## Customers' accounts
 
 - **Sign-up:** name, email, password and an optional company. New accounts get free credits; you set how many, and 0 means none.
-- **Credits and plans:** one credit = one check of one domain, and credits never expire. Plan checks are used before credits.
+- **Credits, plans and monthly accounts:** one credit = one check of one domain, and credits never expire. Plan checks are
+  used first, then credits, then the monthly account (if they have one).
   If a check can't run (the domain doesn't exist, DNS fails) the customer isn't charged. Re-opening a saved report is free,
   and checking the same domain again within 10 minutes shows the earlier report instead of charging twice.
 - **Reports:** kept in the account and can be downloaded as a standalone HTML file or printed to PDF.
@@ -174,20 +187,27 @@ Double-click **`Start Grader.bat`**. It installs anything missing, starts the si
 and opens the super-admin portal, which asks you to create a password on the first visit. Everything works locally
 except confirming Yoco payments, because Yoco can't reach a webhook on your PC. Use *Mark paid* to test the flow.
 
-## What it checks (100 points)
+## What it checks (25 checks, 124 points)
 
 | Category | Checks |
 |---|---|
-| **Email Security** (35) | SPF (full include/redirect walk, 10-lookup limit, `+all`, duplicates) · DMARC (proper tag parsing, `sp=`, `pct=`, `rua=`, inherited from the parent domain) · DKIM (35 common selectors) · MTA-STS (record and policy file) · TLS-RPT |
+| **Email Security** (39) | SPF (full include/redirect walk, 10-lookup limit, `+all`, duplicates) · DMARC (proper tag parsing, `sp=`, `pct=`, `rua=`, inherited from the parent domain) · DKIM (35 common selectors) · MTA-STS (record and policy file) · TLS-RPT · STARTTLS on the mail servers (port 25, with certificate check) |
+| **Blacklists & Reputation** (20) | Own mail server IPs on 9 spam blacklists (Spamhaus ZEN, Barracuda, SpamCop, UCEPROTECT 1, PSBL, Mailspike, blocklist.de, 0spam, GBUdb) · the domain on Spamhaus DBL, SURBL and URIBL (spam, phishing, malware, hacked site) · reverse DNS (PTR) of the mail servers, forward-confirmed |
 | **HTTPS & TLS** (25) | Trusted certificate (explains expired, wrong host, self-signed or incomplete chain) · renewal runway (scaled to the certificate's lifetime) · TLS 1.3 · TLS 1.0/1.1 refused · HTTP→HTTPS redirect |
 | **Web Security Headers** (30) | HSTS (max-age) · CSP (flags `unsafe-inline` and wildcards) · clickjacking (XFO or `frame-ancestors`) · nosniff · Referrer-Policy · Permissions-Policy · version banners · cookie flags |
 | **Domain & DNS** (10) | CAA (walks up the DNS tree per RFC 8659) · DNSSEC · security.txt |
 
-**Scoring.** Each check earns full, partial or zero points. Bands: A ≥ 90, B ≥ 80, C ≥ 65, D ≥ 50, else F.
+**Which mail servers are checked for blacklists.** The domain's own ones: its MX hosts, plus the servers its SPF record
+names directly (single `ip4:` addresses, `a`, `mx`). Big providers (Google, Microsoft, Zoho, Mimecast, ...) and SPF
+`include:`s are left out, because their reputation is the provider's job and nothing the customer can change.
+
+**Scoring.** Each check earns full, partial or zero points, and the score is the percentage of the points that could
+be measured. Bands: A ≥ 90, B ≥ 80, C ≥ 65, D ≥ 50, else F.
 An A+ needs 97+ with no medium-or-worse findings.
 
 **Caps.** A critical issue caps the grade at C, and a high-severity issue caps it at B.
-This means a domain anyone can spoof can't get an A just for having good headers.
+This means a domain anyone can spoof can't get an A just for having good headers. A domain on a phishing or malware
+blocklist is critical; a mail server on Spamhaus, Barracuda or SpamCop is high.
 
 **Unscored results:**
 - Checks that don't apply aren't scored, for example DKIM or MTA-STS when the domain has no mail servers, or every web check when it has no website.
@@ -206,6 +226,15 @@ This means a domain anyone can spoof can't get an A just for having good headers
   - **Homepage only:** only the homepage's headers and cookies are checked, not every page.
   - **Blocked scanner:** some sites block automated visitors. The report notes when the homepage answered 403.
   - **One vantage point:** results reflect your server's view of the domain, which almost always matches everyone else's.
+  - **Port 25:** many networks (home connections, some clouds) block outgoing port 25. The STARTTLS check then says
+    "not tested" instead of failing; on a normal server it works.
+- **Blacklists never give false alarms from refusals.** Spamhaus, SURBL and URIBL answer lookups they refuse (e.g.
+  through Google or Cloudflare DNS) with codes that look like listings, and lists that shut down sometimes "list"
+  everything. Every answer is checked against each list's documented codes, and each list must first answer its
+  RFC 5782 test entries correctly; a list that doesn't is shown as "couldn't check", never as a listing. The admin
+  dashboard's system check shows which lists answer from your server. On the server, the installer sets up a
+  private resolver (unbound, 127.0.0.1) so Spamhaus answers. For commercial volumes Spamhaus requires a free or paid
+  **Data Query Service key** (spamhaus.com): enter it under *Website & scanning › Blacklist checks*.
 - **The grade is a judgement.** The letter grade reflects how the issues are weighted, and the caps stop a spoofable
   domain getting an A. It's a strong indicator of security hygiene, not a penetration test: it can't see
   vulnerable software, weak passwords or anything behind a login.
@@ -246,12 +275,15 @@ The original `CyberHygieneGrader("example.com").run_full_grade()` still works.
 install.sh                                    AlmaLinux installer/updater (nginx, certbot, systemd, firewall, SELinux)
 Start Grader.bat                              run it on Windows
 cybergrader/
-  checks/mail.py, tls.py, web.py, domain.py   the 21 checks, registered with @check(id, category, title, points)
+  checks/mail.py, smtp.py, reputation.py,
+         tls.py, web.py, domain.py            the 25 checks, registered with @check(id, category, title, points)
+  dnsbl.py                                    blacklist lookups with answer-code and RFC 5782 test-entry validation
   grader.py, report.py, pdf.py                scoring and grade caps; terminal, HTML and PDF reports
   site.py, accounts.py                        customer website: sign-up, credits, plans, paid checks, API keys
   preview.py, leads.py, seo.py                free checks and owner unlocks; fix-it leads; search pages, robots, sitemap
   lan.py                                      building network audit grading
   billing.py, mailer.py                       Yoco checkout + signed webhooks, orders, invoices; SMTP email
+  postpaid.py                                 monthly accounts: bills, on hold when unpaid, bill emails
   admin.py, settings.py, selfcheck.py         super-admin portal, settings, environment checks
   db.py, manage.py, service.py                SQLite storage; server maintenance commands; scan limits
   templates/                                  website, super-admin, invoice and email templates

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import dns.exception
 import dns.resolver
+import dns.reversename
 
 from .memo import Memo
 
@@ -85,6 +86,14 @@ class DNSClient:
         if not found and failures:
             raise failures[0]
         return found
+
+    def ipv4(self, name: str) -> list[str]:
+        return [r.address for r in self.query(name, "A")]
+
+    def ptr(self, ip: str) -> list[str]:
+        """Reverse DNS names for an address."""
+        return [r.target.to_text(omit_final_dot=True).lower()
+                for r in self.query(dns.reversename.from_address(ip).to_text(), "PTR")]
 
     def zone_apex(self, name: str) -> str:
         """The zone that contains name, e.g. 'example.co.za' for 'shop.example.co.za'."""

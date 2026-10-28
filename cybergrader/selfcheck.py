@@ -16,6 +16,7 @@ from pathlib import Path
 import requests
 
 from .context import DEFAULT_USER_AGENT
+from .dnsbl import DOMAIN_LISTS, IP_LISTS, DnsblClient
 from .dnsutil import DNSClient, Inconclusive
 from .settings import Settings
 
@@ -76,6 +77,25 @@ def _dns(settings: Settings) -> SystemCheck:
         return SystemCheck("DNS lookups", "fail", f"{described} returned no records for example.com or google.com.", PUBLIC_DNS_TIP)
     elapsed = round((time.monotonic() - started) * 1000)
     return SystemCheck("DNS lookups", "ok", f"Resolving through {described}; answered in {elapsed} ms.")
+
+
+def _blacklists(settings: Settings) -> SystemCheck:
+    """Do the spam blacklists answer their test entries through the configured resolver?"""
+    client = DnsblClient(settings.dnsbl_nameservers or settings.nameservers or None, timeout=3.0,
+                         spamhaus_key=settings.spamhaus_dqs_key)
+    lists = IP_LISTS + DOMAIN_LISTS
+    with ThreadPoolExecutor(max_workers=len(lists)) as pool:
+        problems = dict(zip((bl.name for bl in lists), pool.map(client.health, lists)))
+    broken = {name: problem for name, problem in problems.items() if problem}
+    via = ", ".join(str(server) for server in client.resolver.nameservers)
+    if not broken:
+        return SystemCheck("Blacklist lookups", "ok", f"All {len(lists)} blacklists answer correctly through {via}.")
+    detail = f"{len(lists) - len(broken)} of {len(lists)} blacklists answer through {via}. Not answering: " +         "; ".join(f"{name} ({problem})" for name, problem in broken.items()) + "."
+    fix = ("Reports show these lists as 'couldn't check'. Spamhaus and URIBL refuse lookups through public DNS services: "
+           "on the server, the installer's local resolver (Settings > Website & scanning > Blacklist checks: 127.0.0.1) "
+           "fixes that; for Spamhaus at commercial volumes add a DQS key.")
+    major = any(name.startswith("Spamhaus") for name in broken)
+    return SystemCheck("Blacklist lookups", "warn" if major else "info", detail, fix)
 
 
 def _dns_record_types(settings: Settings) -> SystemCheck:
@@ -172,7 +192,7 @@ def _storage(folder: Path) -> SystemCheck:
 
 def run_selfcheck(settings: Settings, folder: Path) -> list[SystemCheck]:
     jobs = [_python, _packages, lambda: _dns(settings), lambda: _dns_record_types(settings), _certificate_trust,
-            lambda: _web_requests(settings), _legacy_tls, lambda: _storage(folder)]
+            lambda: _web_requests(settings), _legacy_tls, lambda: _storage(folder), lambda: _blacklists(settings)]
 
     def run(job):
         try:

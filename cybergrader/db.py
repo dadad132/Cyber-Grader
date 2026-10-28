@@ -47,7 +47,7 @@ MIGRATIONS = [
         domain TEXT NOT NULL,
         grade TEXT NOT NULL,
         score INTEGER NOT NULL,
-        paid_with TEXT NOT NULL,               -- credit, plan, free, api or admin
+        paid_with TEXT NOT NULL,               -- credit, plan, account, free, api or admin
         report_json TEXT NOT NULL,
         created_at TEXT NOT NULL
     );
@@ -56,7 +56,7 @@ MIGRATIONS = [
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         ref TEXT NOT NULL UNIQUE,
         user_id INTEGER NOT NULL REFERENCES users(id),
-        product_kind TEXT NOT NULL,            -- credits or plan
+        product_kind TEXT NOT NULL,            -- credits, plan, account (opening fee) or bill
         product_id TEXT NOT NULL,
         description TEXT NOT NULL,
         credits INTEGER NOT NULL DEFAULT 0,
@@ -172,6 +172,18 @@ MIGRATIONS = [
     ALTER TABLE users ADD COLUMN firm_email TEXT NOT NULL DEFAULT '';
     ALTER TABLE users ADD COLUMN firm_phone TEXT NOT NULL DEFAULT '';
     ALTER TABLE users ADD COLUMN firm_url TEXT NOT NULL DEFAULT '';
+    """,
+    """
+    ALTER TABLE users ADD COLUMN account_status TEXT NOT NULL DEFAULT 'none';  -- monthly account: none, active, closing, closed
+    ALTER TABLE users ADD COLUMN account_period_start TEXT;
+    ALTER TABLE users ADD COLUMN account_period_end TEXT;     -- the billing day that ends the current month
+    ALTER TABLE orders ADD COLUMN lines_json TEXT;            -- monthly bills: itemised invoice lines
+    ALTER TABLE orders ADD COLUMN due_at TEXT;                -- monthly bills: the account goes on hold if unpaid by then
+    ALTER TABLE orders ADD COLUMN notice TEXT;                -- monthly bills: last email sent (issued, reminder, on-hold)
+    ALTER TABLE scans ADD COLUMN charge_cents INTEGER;        -- price of a check run on a monthly account
+    ALTER TABLE scans ADD COLUMN bill_order_id INTEGER REFERENCES orders(id);  -- the monthly bill it was charged on
+    CREATE INDEX scans_unbilled ON scans(user_id, paid_with, bill_order_id);
+    CREATE INDEX orders_bills ON orders(product_kind, status, due_at);
     """,
 ]
 

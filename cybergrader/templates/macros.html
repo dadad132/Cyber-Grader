@@ -22,40 +22,39 @@
 {%- endmacro %}
 
 {% macro price_cards(products, signed_in, payments_ready) -%}
-{% if products.plans %}
+{% set plan_kinds = {30: 'Monthly plan', 31: 'Monthly plan', 90: 'Quarterly plan', 91: 'Quarterly plan', 92: 'Quarterly plan',
+                     180: '6-month plan', 182: '6-month plan', 183: '6-month plan', 365: 'Yearly plan', 366: 'Yearly plan'} %}
 <div class="prices">
 {% for plan in products.plans %}
   <div class="price-card featured">
-    <span class="eyebrow">Monthly plan</span>
+    <span class="eyebrow">{{ plan_kinds.get(plan.days, 'Plan') }}</span>
     <h3>{{ plan.name }}</h3>
     <div class="amount">{{ plan.price }}</div><p class="per">for {{ plan.days }} days</p>
     <p>{{ plan.allowance }} for {{ plan.days }} days. Renew whenever you like; nothing is debited automatically.</p>
     {{ buy_button(plan, signed_in, 'Get ' ~ plan.name) }}
   </div>
 {% endfor %}
-{% for pack in products.packs %}
-  <div class="price-card">
-    <span class="eyebrow">Credits</span>
-    <h3>{{ pack.name }}</h3>
-    <div class="amount">{{ pack.price }}</div>
-    <p>{{ pack.credits }} check{{ '' if pack.credits == 1 else 's' }}{% if pack.each %} · {{ pack.each }} each{% endif %}. Credits never expire.</p>
-    {{ buy_button(pack, signed_in, 'Buy') }}
+{% if products.account %}{% set acct = products.account %}
+  <div class="price-card{% if not products.plans %} featured{% endif %}">
+    <span class="eyebrow">Pay after use</span>
+    <h3>{{ acct.name }}</h3>
+    <div class="amount">{{ acct.price }}</div><p class="per">a month + {{ acct.per_check }} per check</p>
+    <p>Check domains and download reports all month; you get one bill at the end of it for the checks you used.
+      {% if acct.limit %}Up to {{ acct.limit }} checks a month. {% endif %}Bills are due within {{ acct.grace_days }} day{{ '' if acct.grace_days == 1 else 's' }}.</p>
+    {% if account_info is defined and account_info.open %}<p class="actions"><a class="btn btn-block btn-secondary" href="{{ url_for('site.account') }}#monthly">Your account is open</a></p>
+    {% else %}{{ buy_button(acct, signed_in, 'Open account') }}{% endif %}
   </div>
-{% endfor %}
-</div>
-{% else %}
-<div class="prices">
-{% for pack in products.packs %}
-  <div class="price-card{% if loop.index == 2 %} featured{% endif %}">
-    <span class="eyebrow">Credits</span>
-    <h3>{{ pack.name }}</h3>
-    <div class="amount">{{ pack.price }}</div>
-    <p>{{ pack.credits }} check{{ '' if pack.credits == 1 else 's' }}{% if pack.each %} · {{ pack.each }} each{% endif %}. Credits never expire.</p>
-    {{ buy_button(pack, signed_in, 'Buy') }}
-  </div>
-{% endfor %}
-</div>
 {% endif %}
+{% for pack in products.packs %}
+  <div class="price-card{% if not products.plans and not products.account and loop.index == 2 %} featured{% endif %}">
+    <span class="eyebrow">Credits</span>
+    <h3>{{ pack.name }}</h3>
+    <div class="amount">{{ pack.price }}</div>
+    <p>{{ pack.credits }} check{{ '' if pack.credits == 1 else 's' }}{% if pack.each %} · {{ pack.each }} each{% endif %}. Credits never expire.</p>
+    {{ buy_button(pack, signed_in, 'Buy') }}
+  </div>
+{% endfor %}
+</div>
 <p class="pricing-note">Prices in South African rand{% if site.vat_registered %}, including {{ site.vat_rate|num }}% VAT{% endif %}. Pay by card or Instant EFT through Yoco. You get an invoice for every payment.</p>
 {%- endmacro %}
 

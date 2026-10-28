@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Bill · {{ site.business_name }}{% endblock %}
+{% block content %}
+<main class="wrap page">
+  <p><a href="{{ url_for('site.invoices') }}">← Invoices</a></p>
+  <h1>{{ bill.description }}</h1>
+  {% if bill.status == 'paid' %}
+  <p class="flash flash-ok">Paid on {{ bill.paid_at|date }}, thank you.{% if invoice %} <a href="{{ url_for('site.invoice', number=invoice.number) }}">View invoice {{ invoice.number }}</a>.{% endif %}</p>
+  {% elif overdue %}
+  <p class="flash flash-err">This bill was due on {{ bill.due_at|date }}. Your {{ site.account_name|lower }} is on hold until it's paid; it works again straight after payment.</p>
+  {% else %}
+  <p class="lead">Due by {{ bill.due_at|date }}. If it isn't paid by then, your {{ site.account_name|lower }} goes on hold until it is.</p>
+  {% endif %}
+
+  <section class="panel">
+    <div class="table-wrap"><table>
+      <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Amount</th></tr></thead>
+      <tbody>{% for line in lines %}
+        <tr><td class="wrap-cell">{{ line.description }}</td><td class="num">{{ line.quantity }}</td><td class="num">{{ money(line.amount_cents) }}</td></tr>
+      {% endfor %}</tbody>
+      <tfoot><tr><th colspan="2">Total{% if site.vat_registered %} (incl. VAT){% endif %}</th><th class="num">{{ money(bill.amount_cents) }}</th></tr></tfoot>
+    </table></div>
+    {% if bill.status != 'paid' %}
+    <form method="post" action="{{ url_for('site.pay_bill', ref=bill.ref) }}" data-busy="Opening Yoco…" style="margin-top:16px">{{ csrf_field() }}
+      <button class="btn btn-lg" type="submit">Pay {{ money(bill.amount_cents) }}</button></form>
+    <p class="sub">Card or Instant EFT through Yoco. You get an invoice as soon as it's paid.</p>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}

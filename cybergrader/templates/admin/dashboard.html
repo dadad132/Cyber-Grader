@@ -12,6 +12,7 @@
     <div class="stat"><span>Checks this week</span><strong>{{ stats.scans }}</strong><small>by customers</small></div>
     <div class="stat"><span>Revenue, last 30 days</span><strong>{{ money(stats.revenue) }}</strong><small>live payments only</small></div>
     <div class="stat"><span>Waiting for payment</span><strong>{{ stats.pending }}</strong><small><a href="{{ url_for('admin.payments', status='pending') }}">View</a></small></div>
+    {% if stats.overdue_bills %}<div class="stat"><span>Overdue monthly bills</span><strong>{{ stats.overdue_bills }}</strong><small>accounts on hold · <a href="{{ url_for('admin.payments', status='pending') }}">View</a></small></div>{% endif %}
     <div class="stat"><span>Free checks this week</span><strong>{{ stats.free_checks }}</strong><small>by visitors</small></div>
     <div class="stat"><span>New leads</span><strong>{{ stats.new_leads }}</strong><small><a href="{{ url_for('admin.leads', status='new') }}">View</a></small></div>
   </div>

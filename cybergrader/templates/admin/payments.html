@@ -5,7 +5,8 @@
 <main class="wrap page">
   <h1>Payments</h1>
   <p class="lead">Orders are marked paid automatically when Yoco confirms the payment. If a payment shows as paid in the Yoco app
-    but is still pending here, use <em>Mark paid</em>; it delivers the credits or plan and issues the invoice.</p>
+    but is still pending here, use <em>Mark paid</em>; it delivers the credits or plan and issues the invoice. Monthly account bills
+    show here as pending until they're paid; <em>Mark paid</em> also settles a bill paid by EFT and takes the account off hold.</p>
   <p class="actions">
     {% for key, label in (('', 'All'), ('paid', 'Paid'), ('pending', 'Pending'), ('failed', 'Failed')) %}
       <a class="btn btn-small {{ '' if status == key else 'btn-secondary' }}" href="{{ url_for('admin.payments', status=key or None) }}">{{ label }}</a>

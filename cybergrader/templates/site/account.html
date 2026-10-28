@@ -47,9 +47,34 @@
     </form>
   </section>
 
+  {% if account_info.status != 'none' %}
+  <section class="panel" id="monthly">
+    <h2>{{ site.account_name }}</h2>
+    {% if account_info.open %}
+    <p class="sub">Checks you run when you have no credits or plan checks left go on a monthly bill ({{ money(site.account_check_cents) }} each,
+      plus the {{ money(site.account_fee_cents) }} monthly fee){% if account_info.limit %}, up to {{ account_info.limit }} checks a month{% endif %}.</p>
+    <dl class="kv">
+      <dt>This month</dt><dd>{{ account_info.period_start|date }} to {{ account_info.period_end|date }}</dd>
+      <dt>Used so far</dt><dd>{{ account_info.checks }} check{{ '' if account_info.checks == 1 else 's' }}, {{ money(account_info.owed_cents) }}</dd>
+      <dt>Status</dt><dd>{% if account_info.on_hold %}<span class="tag tag-err">on hold</span> until the overdue bill is paid
+        {% elif account_info.closing %}<span class="tag tag-warn">closing</span> on {{ account_info.period_end|date }}, after a final bill
+        {% else %}<span class="tag tag-ok">active</span> · next bill {{ account_info.period_end|date }}{% endif %}</dd>
+    </dl>
+    <form method="post" action="{{ url_for('site.monthly_account') }}" style="margin-top:12px">{{ csrf_field() }}
+      {% if account_info.closing %}<button class="btn btn-secondary" type="submit" name="action" value="keep">Keep my account open</button>
+      {% else %}<button class="btn btn-secondary" type="submit" name="action" value="close">Close at the end of this month</button>{% endif %}
+    </form>
+    {% else %}
+    <p class="sub">Your {{ site.account_name|lower }} is closed.{% if site.account_enabled %} You can <a href="{{ url_for('site.buy') }}">open it again</a> at any time.{% endif %}</p>
+    {% endif %}
+    {% if account_info.bills %}<p class="sub" style="margin-top:12px">Unpaid bills:
+      {% for bill in account_info.bills %}<a href="{{ url_for('site.bill', ref=bill.ref) }}">{{ money(bill.amount_cents) }} due {{ bill.due_at|date }}</a>{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+  </section>
+  {% endif %}
+
   <section class="panel" id="api">
     <h2>API access</h2>
-    <p class="sub">Run checks from your own scripts or tools. Each API check uses a credit or plan check, just like the website.</p>
+    <p class="sub">Run checks from your own scripts or tools. Each API check is paid for just like on the website (plan, credit or monthly account).</p>
     {% if new_key %}
       <p class="flash flash-ok">Your new API key. Copy it now; it won't be shown again:<br><code>{{ new_key }}</code></p>
     {% elif current_user.api_key_hint %}

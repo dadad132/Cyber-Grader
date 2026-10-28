@@ -26,9 +26,10 @@
 
 <section class="section wrap" id="what">
   <div class="section-head"><h2>What the domain health check covers</h2>
-    <p>21 checks across the four areas attackers look at first. Every problem comes with a severity and a step-by-step fix your IT person or web host can follow.</p></div>
+    <p>{{ check_count }} checks across the five areas attackers and spam filters look at first. Every problem comes with a severity and a step-by-step fix your IT person or web host can follow.</p></div>
   <div class="cards">
-    <a class="card" href="{{ url_for('seo.tool_email_security_check') }}"><h3>Email security</h3><p>SPF, DMARC, DKIM, MTA-STS and TLS reporting decide whether criminals can send invoices "from" you, the scam behind most business email fraud.</p></a>
+    <a class="card" href="{{ url_for('seo.tool_email_security_check') }}"><h3>Email security</h3><p>SPF, DMARC, DKIM, MTA-STS, TLS reporting and mail server encryption decide whether criminals can send invoices "from" you, the scam behind most business email fraud.</p></a>
+    <a class="card" href="{{ url_for('seo.tool_blacklist_check') }}"><h3>Blacklists &amp; reputation</h3><p>Are your mail servers or your domain on Spamhaus, Barracuda, SpamCop, SURBL or URIBL? A listing quietly sends your emails to spam. Plus reverse DNS for your mail servers.</p></a>
     <a class="card" href="{{ url_for('seo.tool_ssl_check') }}"><h3>SSL certificate &amp; TLS</h3><p>Is the certificate trusted and renewing on time? Are old, broken TLS versions switched off? Does every visitor land on HTTPS?</p></a>
     <a class="card" href="{{ url_for('seo.tool_security_headers_check') }}"><h3>Security headers</h3><p>HSTS, Content-Security-Policy, clickjacking and cookie protection: the browser-side defences that stop script injection and session theft.</p></a>
     <a class="card" href="{{ url_for('seo.tool_dns_security_check') }}"><h3>DNS security</h3><p>DNSSEC and CAA protect against forged DNS answers and rogue certificates, plus a published contact for security researchers.</p></a>

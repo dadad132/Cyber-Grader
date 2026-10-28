@@ -3,7 +3,8 @@
 Flow: create an order -> create a Yoco checkout -> send the customer to Yoco's payment page ->
 Yoco calls our webhook (payment.succeeded) -> we add credits or a plan and issue an invoice.
 Only the signed webhook (or a super admin) marks an order paid; the return URL is never trusted.
-Yoco has no recurring billing, so monthly plans are bought (and renewed) like any other product.
+Yoco has no recurring billing, so plans are bought (and renewed) like any other product, and monthly accounts
+get a bill each month that the customer pays the same way (see postpaid.py).
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 import requests
 
-from .accounts import _change_credits, apply_plan
+from .accounts import _change_credits, apply_plan, open_account
 from .db import iso, next_number, transaction, utcnow
 from .settings import Settings
 
@@ -110,6 +111,9 @@ def create_order(conn: sqlite3.Connection, user_id: int, product: dict) -> sqlit
     if product["kind"] == "credits":
         description = f"{product['name']}: {product['credits']} domain check credit{'s' if product['credits'] != 1 else ''}"
         values = (product["credits"], None, 0)
+    elif product["kind"] == "account":
+        description = f"{product['name']}: first month's fee"
+        values = (0, None, 0)
     else:
         scans = product["scans"] or None  # 0 means unlimited
         allowance = "unlimited checks" if scans is None else f"{scans} checks"
@@ -165,7 +169,9 @@ def fulfil_order(conn: sqlite3.Connection, settings: Settings, order_id: int, *,
         order = conn.execute("SELECT * FROM orders WHERE id = ?", (order_id,)).fetchone()
         if order["product_kind"] == "credits":
             _change_credits(conn, order["user_id"], order["credits"], f"Bought {order['description']} (order {order['ref']})")
-        else:
+        elif order["product_kind"] == "account":
+            open_account(conn, order["user_id"])
+        elif order["product_kind"] == "plan":
             plan_name = order["description"].rsplit(" plan: ", 1)[0]
             apply_plan(conn, order["user_id"], plan_id=order["product_id"], plan_name=plan_name,
                        days=order["plan_days"], scans=order["plan_scans"])
@@ -193,7 +199,8 @@ def _create_invoice(conn: sqlite3.Connection, settings: Settings, order: sqlite3
         },
         "buyer": {"name": user["name"], "company": user["company"], "email": user["email"],
                   "address": user["address"], "vat_number": user["vat_number"]},
-        "lines": [{"description": order["description"], "quantity": 1, "amount_cents": order["amount_cents"]}],
+        "lines": (json.loads(order["lines_json"]) if order["lines_json"]
+                  else [{"description": order["description"], "quantity": 1, "amount_cents": order["amount_cents"]}]),
         "excl_cents": excl,
         "vat_cents": vat,
         "vat_rate": settings.vat_rate if settings.vat_registered else 0,
@@ -234,7 +241,9 @@ def _process_event(conn: sqlite3.Connection, settings: Settings, event: dict) ->
         log.warning("Yoco event %s doesn't match any order (metadata %s)", event_id, metadata)
         return None
     if event.get("type") == "payment.failed":
-        conn.execute("UPDATE orders SET status = 'failed' WHERE id = ? AND status = 'pending'", (order["id"],))
+        # A declined card doesn't settle a monthly bill: it stays owed (and payable).
+        conn.execute("UPDATE orders SET status = 'failed' WHERE id = ? AND status = 'pending' AND product_kind != 'bill'",
+                     (order["id"],))
         return None
     if event.get("type") != "payment.succeeded":
         return None

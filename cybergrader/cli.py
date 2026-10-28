@@ -101,7 +101,9 @@ def main(argv: list[str] | None = None) -> int:
         try:
             report = grade_domain(domain, timeout=args.timeout or settings.timeout,
                                   nameservers=args.nameserver or settings.nameservers or None,
-                                  user_agent=settings.user_agent or DEFAULT_USER_AGENT)
+                                  user_agent=settings.user_agent or DEFAULT_USER_AGENT,
+                                  dnsbl_nameservers=settings.dnsbl_nameservers or None,
+                                  spamhaus_key=settings.spamhaus_dqs_key)
         except (ValueError, Inconclusive) as exc:
             print(f"{domain}: {exc}", file=sys.stderr)
             exit_code = 1

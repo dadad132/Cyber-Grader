@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% set waiting = order.status == 'pending' and result not in ('cancelled', 'failed') %}
+{% set back = url_for('site.bill', ref=order.ref) if order.product_kind == 'bill' else url_for('site.buy') %}
 {% block head_extra %}{% if waiting %}<meta http-equiv="refresh" content="3">{% endif %}{% endblock %}
 {% block title %}Payment · {{ site.business_name }}{% endblock %}
 {% block content %}
@@ -7,7 +8,10 @@
   {% if order.status == 'paid' %}
     <h1>Payment received</h1>
     <p class="sub">Thank you! {{ order.description }}.</p>
-    <p class="flash flash-ok">{% if order.product_kind == 'credits' %}{{ order.credits }} credit{{ '' if order.credits == 1 else 's' }} added. You now have {{ current_user.credits }}.{% else %}Your {{ plan.name }} plan is active until {{ plan.expires_at|date }}.{% endif %}</p>
+    <p class="flash flash-ok">{% if order.product_kind == 'credits' %}{{ order.credits }} credit{{ '' if order.credits == 1 else 's' }} added. You now have {{ current_user.credits }}.
+      {%- elif order.product_kind == 'account' %}Your {{ site.account_name|lower }} is open. Check domains whenever you like; your first bill comes on {{ current_user.account_period_end|date }}.
+      {%- elif order.product_kind == 'bill' %}Your bill is paid{% if current_user.account_status in ('active', 'closing') %} and your {{ site.account_name|lower }} is in good standing{% endif %}.
+      {%- else %}Your {{ plan.name }} plan is active until {{ plan.expires_at|date }}.{% endif %}</p>
     <div class="actions">
       <a class="btn" href="{{ url_for('site.dashboard') }}">Check a domain</a>
       {% if invoice %}<a class="btn btn-secondary" href="{{ url_for('site.invoice', number=invoice.number) }}">View invoice {{ invoice.number }}</a>{% endif %}
@@ -15,11 +19,11 @@
   {% elif result == 'cancelled' %}
     <h1>Payment cancelled</h1>
     <p class="sub">No money was taken. You can choose something else or try again.</p>
-    <a class="btn" href="{{ url_for('site.buy') }}">Back to buying checks</a>
+    <a class="btn" href="{{ back }}">{{ 'Back to the bill' if order.product_kind == 'bill' else 'Back to buying checks' }}</a>
   {% elif result == 'failed' or order.status == 'failed' %}
     <h1>Payment didn't go through</h1>
     <p class="sub">Your bank or Yoco declined the payment, so nothing was charged. Please try again or use a different card.</p>
-    <a class="btn" href="{{ url_for('site.buy') }}">Try again</a>
+    <a class="btn" href="{{ back }}">Try again</a>
   {% else %}
     <h1>Confirming your payment…</h1>
     <p class="sub">We're waiting for Yoco to confirm the payment. This usually takes a few seconds; this page refreshes by itself.</p>

@@ -66,6 +66,8 @@ code{font:13px ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--s
 .scanbox input:focus{outline:2px solid var(--accent);outline-offset:1px}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding-top:20px}
 .toolbar .spacer{flex:1}
+.toolbar-form{display:flex;gap:6px;align-items:center}
+.toolbar-form input{min-width:190px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font:inherit;font-size:13px}
 .status li{padding-left:0;padding-right:0}
 .panel .checklist{border:0;background:none}
 .st-warn .icon{background:var(--med-bg);color:var(--med)}.st-fail .icon{background:var(--crit-bg);color:var(--crit)}

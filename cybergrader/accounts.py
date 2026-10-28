@@ -6,7 +6,7 @@ import json
 import re
 import secrets
 import sqlite3
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -171,7 +171,28 @@ def apply_plan(conn: sqlite3.Connection, user_id: int, *, plan_id: str, plan_nam
 
 
 def end_plan(conn: sqlite3.Connection, user_id: int) -> None:
-    conn.execute("UPDATE users SET plan_expires_at = ? WHERE id = ?", (iso(utcnow()), user_id))
+    now = iso(utcnow())  # ended on purpose, so no "your plan has ended" email
+    conn.execute("UPDATE users SET plan_expires_at = ?, reminder_sent_for = ? WHERE id = ?", (now, f"{now}|ended", user_id))
+
+
+BILL_DAY_MAX = 28  # every month has a 28th, so a monthly account's billing day never drifts
+
+
+def next_bill_date(moment: datetime) -> datetime:
+    """The same day next month (the 28th at the latest), e.g. 15 Oct -> 15 Nov, 31 Jan -> 28 Feb."""
+    year, month = (moment.year + 1, 1) if moment.month == 12 else (moment.year, moment.month + 1)
+    return moment.replace(year=year, month=month, day=min(moment.day, BILL_DAY_MAX))
+
+
+def open_account(conn: sqlite3.Connection, user_id: int, now: datetime | None = None) -> None:
+    """Open a monthly account (see postpaid.py) whose first month is paid for. Call inside transaction()."""
+    now = now or utcnow()
+    user = conn.execute("SELECT account_status FROM users WHERE id = ?", (user_id,)).fetchone()
+    if user["account_status"] == "closing":  # paid again before it closed: just keep it open
+        conn.execute("UPDATE users SET account_status = 'active' WHERE id = ?", (user_id,))
+    elif user["account_status"] != "active":
+        conn.execute("UPDATE users SET account_status = 'active', account_period_start = ?, account_period_end = ? "
+                     "WHERE id = ?", (iso(now), iso(next_bill_date(now)), user_id))
 
 
 def charge_for_scan(conn: sqlite3.Connection, user_id: int, domain: str, *, free: bool = False) -> str | None:
@@ -208,10 +229,14 @@ def refund_scan(conn: sqlite3.Connection, user_id: int, method: str, domain: str
                          "WHERE id = ? AND plan_scans_left IS NOT NULL", (user_id,))
 
 
-def record_scan(conn: sqlite3.Connection, user_id: int | None, report: Report, paid_with: str) -> int:
+def record_scan(conn: sqlite3.Connection, user_id: int | None, report: Report, paid_with: str,
+                charge_cents: int | None = None) -> int:
+    """Save a check. charge_cents is its price when it goes on a monthly account's bill."""
     return conn.execute(
-        "INSERT INTO scans (user_id, domain, grade, score, paid_with, report_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (user_id, report.domain, report.grade, report.score, paid_with, json.dumps(report.to_dict()), iso(utcnow())),
+        "INSERT INTO scans (user_id, domain, grade, score, paid_with, report_json, created_at, charge_cents) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (user_id, report.domain, report.grade, report.score, paid_with, json.dumps(report.to_dict()), iso(utcnow()),
+         charge_cents),
     ).lastrowid
 
 

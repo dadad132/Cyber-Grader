@@ -20,6 +20,7 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .admin import create_admin_blueprint
+from .checks import all_checks
 from .clients import create_clients_blueprint
 from .billing import money
 from .db import iso, migrate, utcnow
@@ -89,6 +90,7 @@ def create_app(store: SettingsStore | None = None) -> Flask:
     def template_globals():
         base = store.current.site_url.rstrip("/") or request.host_url.rstrip("/")
         return {"site": store.current, "current_user": g.get("user"), "csrf_field": csrf_field, "money": money,
+                "check_count": sum(1 for spec in all_checks() if spec.max_points),  # scored checks
                 "base_css": BASE_CSS, "page_script": SUBMIT_SCRIPT, "now_iso": iso(utcnow()),
                 "canonical_url": base + request.path, "indexable": request.endpoint in INDEXABLE}
 

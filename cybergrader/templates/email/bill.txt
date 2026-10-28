@@ -1,0 +1,22 @@
+Hi {{ bill.name }},
+
+{% if stage == 'on-hold' -%}
+Your {{ settings.account_name|lower }} with {{ settings.business_name }} is on hold because this bill was due on {{ due.strftime('%d %b %Y') }} and hasn't been paid yet. Checks on the account start working again as soon as it's paid.
+{%- elif stage == 'reminder' -%}
+A reminder that your bill below is due on {{ due.strftime('%d %b %Y') }}. If it isn't paid by then, your {{ settings.account_name|lower }} goes on hold until it is.
+{%- else -%}
+Here's your {{ settings.account_name|lower }} bill from {{ settings.business_name }}. Please pay it by {{ due.strftime('%d %b %Y') }} to keep your account active.
+{%- endif %}
+
+{{ bill.description }}
+{% for line in lines %}
+  {{ line.description }}{% if line.quantity != 1 %} x {{ line.quantity }}{% endif %}: {{ money(line.amount_cents) }}
+{%- endfor %}
+
+  Total: {{ money(bill.amount_cents) }}
+
+Pay by card or Instant EFT here (you'll get an invoice straight away):
+{{ link }}
+
+{{ settings.business_name }}{% if settings.contact_email %}
+{{ settings.contact_email }}{% endif %}

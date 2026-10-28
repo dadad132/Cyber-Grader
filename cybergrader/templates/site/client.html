@@ -27,7 +27,7 @@
       {% endif %}
     </section>
     <section class="panel"><h2>Check {{ client.domain }}</h2>
-      <p class="sub">Uses one credit or plan check. Reports are kept below.</p>
+      <p class="sub">Uses a plan check, a credit or your monthly account. Reports are kept below.</p>
       <form method="post" action="{{ url_for('site.scan') }}" data-busy="Checking… (about 10 seconds)">{{ csrf_field() }}
         <input type="hidden" name="domain" value="{{ client.domain }}"><input type="hidden" name="again" value="1">
         <button class="btn" type="submit">Check now</button></form>

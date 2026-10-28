@@ -33,6 +33,17 @@
     {{ ui.field('user_agent', 'Scanner user agent', values.user_agent, placeholder=default_user_agent,
                 help='Leave blank unless many sites block the scanner (reports then note an HTTP 403 homepage).') }}
   </section>
+  <section class="panel" id="blacklists"><h2>Blacklist checks</h2>
+    <p class="sub">Spamhaus and URIBL refuse lookups that come through big public DNS services (Google, Cloudflare), so blacklist
+      lookups should go through this server's own resolver. The AlmaLinux installer sets one up (unbound on <code>127.0.0.1</code>).
+      Lists that refuse to answer are shown on reports as "couldn't check", never as a listing.</p>
+    <div class="grid2">
+      {{ ui.field('dnsbl_nameservers', 'DNS server for blacklist lookups', values.dnsbl_nameservers|join(', '),
+                  placeholder='Blank = same as scanning', help='e.g. <code>127.0.0.1</code> (an IP, optionally with a port like <code>127.0.0.1:5335</code>).') }}
+      {{ ui.field('spamhaus_dqs_key', 'Spamhaus DQS key (optional)', values.spamhaus_dqs_key, attrs='autocomplete="off"',
+                  help="Spamhaus's free public lists are for low-volume, non-commercial use. For a paid service with many checks, get a Data Query Service key at spamhaus.com and enter it here.") }}
+    </div>
+  </section>
   <section class="panel"><h2>Abuse protection</h2>
     <div class="grid2">
       {{ ui.field('rate_limit', 'Checks per account per 10 minutes', values.rate_limit, type='number', attrs='min="1" max="1000" required') }}
@@ -81,15 +92,39 @@
       {{ ui.field('pack_' ~ i ~ '_price', 'Price (R)', '%.2f'|format(p.price_cents / 100) if p else '', placeholder='199.00', attrs='inputmode="decimal"') }}
     </div>{% endfor %}
   </section>
-  <section class="panel"><h2>Monthly plans</h2>
-    <p class="sub">Paid once through Yoco for the number of days below; Yoco can't debit automatically, so customers get a reminder email 3 days before the end with a renew link. 0 checks = unlimited.</p>
+  <section class="panel"><h2>Plans</h2>
+    <p class="sub">Paid once through Yoco for the number of days below, e.g. 30 for monthly, 90 for quarterly or 365 for yearly.
+      Yoco can't debit cards automatically, so customers get renewal emails with a one-click renew link. 0 checks = unlimited.
+      Leave a name blank to hide that plan.</p>
     {% for i in range(max_plans) %}{% set p = values.plans[i] if i < values.plans|length else {} %}
     <div class="grid2">
-      {{ ui.field('plan_' ~ i ~ '_name', 'Plan ' ~ (i + 1) ~ ' name', p.get('name', ''), placeholder='e.g. Monthly') }}
+      {{ ui.field('plan_' ~ i ~ '_name', 'Plan ' ~ (i + 1) ~ ' name', p.get('name', ''), placeholder='e.g. Monthly, Quarterly, Yearly') }}
       {{ ui.field('plan_' ~ i ~ '_price', 'Price (R)', '%.2f'|format(p.price_cents / 100) if p else '', placeholder='499.00', attrs='inputmode="decimal"') }}
       {{ ui.field('plan_' ~ i ~ '_scans', 'Checks included', p.get('scans', 50), type='number', attrs='min="0"') }}
       {{ ui.field('plan_' ~ i ~ '_days', 'Length (days)', p.get('days', 30), type='number', attrs='min="1" max="366"') }}
     </div>{% if not loop.last %}<hr style="border:0;border-top:1px solid var(--border);margin:6px 0 16px">{% endif %}{% endfor %}
+    <h3>Renewal emails</h3>
+    {{ ui.field('plan_reminder_days', 'Remind customers this many days before their plan ends', values.plan_reminder_days|join(', '),
+                placeholder='7, 3, 1', help='One email on each of these days (up to 5). Leave blank for none. Sent by the daily job at 07:00.') }}
+    {{ ui.checkbox('plan_ended_email', 'Also email them the day after it has ended', values.plan_ended_email) }}
+  </section>
+  <section class="panel" id="monthly-account"><h2>Monthly account (pay after use)</h2>
+    <p class="sub">Customers pay a small monthly fee up front to open the account (which shows they're real), check domains and download
+      reports during the month, and get one bill at the end of it: the checks they used plus next month's fee. If a bill isn't paid in time,
+      checks on the account stop until it is. Credits and plan checks are always used first.</p>
+    {{ ui.checkbox('account_enabled', 'Offer monthly accounts', values.account_enabled,
+                   'Existing accounts keep working and keep being billed if you switch this off; it only stops new ones being opened.') }}
+    <div class="grid2">
+      {{ ui.field('account_name', 'Name', values.account_name, placeholder='Monthly account') }}
+      {{ ui.field('account_fee', 'Monthly fee (R)', '%.2f'|format(values.account_fee_cents / 100), attrs='inputmode="decimal"',
+                  help='Paid up front each month; the first month when they open the account.') }}
+      {{ ui.field('account_check', 'Price per check (R)', '%.2f'|format(values.account_check_cents / 100), attrs='inputmode="decimal"',
+                  help='Price changes apply to checks run after you save.') }}
+      {{ ui.field('account_max_checks', 'Most checks per month', values.account_max_checks, type='number', attrs='min="0"',
+                  help='Limits how much anyone can run up before paying. 0 = no limit.') }}
+      {{ ui.field('account_grace_days', 'Days to pay a bill', values.account_grace_days, type='number', attrs='min="1" max="30"',
+                  help='After this the account is on hold until the bill is paid. A reminder goes out the day before.') }}
+    </div>
   </section>
   <button class="btn" type="submit">Save</button></form>
   <form id="webhook-form" method="post" action="{{ url_for('admin.register_webhook') }}">{{ csrf_field() }}</form>

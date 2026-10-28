@@ -106,6 +106,11 @@ def test_dmarc_sp_reject_does_not_mask_p_none(make_ctx):
 def test_dmarc_missing(make_ctx):
     outcome = mail.check_dmarc(make_ctx(mx=GOOGLE_MX))
     assert outcome.status is Status.FAIL and outcome.severity is Severity.HIGH
+    # Mail domains start in monitoring mode with reports, then step up; never "start at reject, then move to reject".
+    assert '"v=DMARC1; p=none; rua=mailto:dmarc-reports@example.com"' in outcome.fix
+    assert outcome.fix.index("p=quarantine") < outcome.fix.index("finally to p=reject")
+    no_mail = mail.check_dmarc(make_ctx()).fix
+    assert '"v=DMARC1; p=reject"' in no_mail and "then move to p=reject" in no_mail and "p=none" in no_mail
 
 
 def test_dmarc_subdomain_inherits_sp(make_ctx):
