@@ -5,6 +5,10 @@
 <div class="wrap toolbar">
   <a class="btn btn-secondary btn-small" href="{{ url_for('site.landing') }}">← Check another domain</a>
   <span class="spacer"></span>
+  <form method="post" action="{{ url_for('preview.check') }}" data-busy="Checking…">{{ csrf_field() }}
+    <input type="hidden" name="domain" value="{{ row.domain }}"><input type="hidden" name="again" value="1">
+    <input type="hidden" name="back" value="{{ url_for('preview.show', token=row.token) }}">
+    <button class="btn btn-small" type="submit">Check again</button></form>
   {% if unlocked %}
   <a class="btn btn-secondary btn-small" href="{{ url_for('preview.pdf', token=row.token) }}">Download PDF</a>
   <button class="btn btn-secondary btn-small" type="button" data-print>Print</button>

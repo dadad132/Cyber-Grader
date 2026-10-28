@@ -80,10 +80,20 @@ def test_free_checks_are_rate_limited_but_repeats_are_free(app):
     app.extensions["grader"].store.update(free_checks_per_hour=2)
     client = app.test_client()
     free_check(client, "a.example.com")
-    free_check(client, "a.example.com")  # same domain within the hour: reused, not counted
+    free_check(client, "a.example.com")  # same domain a moment later: reused, not counted
     free_check(client, "b.example.com")
     assert free_check(client, "c.example.com").location.endswith("/signup")
     assert app.scanned == ["a.example.com", "b.example.com"]
+
+
+def test_check_again_rescans_instead_of_reusing(app):
+    client = app.test_client()
+    first = free_check(client, "a.example.com").location
+    reused = client.get(free_check(client, "a.example.com").location).get_data(as_text=True)
+    assert "checked a few minutes ago" in reused and "Check again" in reused
+    response = client.post("/check", data={"csrf": csrf_from(client, first), "domain": "a.example.com", "again": "1"})
+    assert "/check/" in response.location and response.location != first
+    assert app.scanned == ["a.example.com", "a.example.com"]
 
 
 def test_unlocking_with_a_credit_reuses_the_check(app):

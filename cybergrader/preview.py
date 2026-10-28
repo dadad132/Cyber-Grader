@@ -29,7 +29,7 @@ from .security import csrf_ok
 from .service import GraderService, RateLimiter, ScanRefused, check_domain_input
 from .site import NoCredits, charge_check, run_paid_scan
 
-REUSE_MINUTES = 60        # a recent check of the same domain is reused instead of re-scanning
+REUSE_MINUTES = 5         # repeat clicks on the same domain reuse the last check; "Check again" always re-scans
 UNLOCK_HOURS = 24         # older previews are re-checked when unlocked with a credit
 CODE_MINUTES = 15
 CODE_ATTEMPTS = 5
@@ -111,11 +111,15 @@ def create_preview_blueprint(service: GraderService) -> Blueprint:
             flash(str(exc), "err")
             return redirect(back)
         conn = request_db()
-        since = iso(utcnow() - timedelta(minutes=REUSE_MINUTES))
-        recent = conn.execute("SELECT report_json FROM previews WHERE domain = ? AND created_at >= ? ORDER BY created_at DESC LIMIT 1",
-                              (domain, since)).fetchone()
+        recent = None
+        if not request.form.get("again"):
+            since = iso(utcnow() - timedelta(minutes=REUSE_MINUTES))
+            recent = conn.execute("SELECT report_json FROM previews WHERE domain = ? AND created_at >= ? ORDER BY created_at DESC LIMIT 1",
+                                  (domain, since)).fetchone()
         if recent:
             data = json.loads(recent["report_json"])
+            flash(f"{domain} was checked a few minutes ago, so these are those results. "
+                  "Changed something since? Use “Check again”.", "info")
         else:
             free_limiter.limit = settings.free_checks_per_hour
             if not free_limiter.allow(client_ip()):
