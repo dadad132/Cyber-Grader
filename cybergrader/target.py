@@ -38,7 +38,7 @@ def normalize_domain(raw: str) -> str:
     except UnicodeError:
         raise ValueError(f"{raw!r} is not a valid domain name.") from None
     labels = host.split(".")
-    if len(labels) < 2 or len(host) > 253 or labels[-1].isdigit() or not all(_LABEL.match(l) for l in labels):
+    if len(labels) < 2 or len(host) > 253 or labels[-1].isdigit() or not all(_LABEL.match(label) for label in labels):
         raise ValueError(f"{raw!r} is not a valid domain name.")
     return host
 

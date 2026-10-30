@@ -86,6 +86,14 @@ def test_free_checks_are_rate_limited_but_repeats_are_free(app):
     assert app.scanned == ["a.example.com", "b.example.com"]
 
 
+def test_free_check_limit_of_zero_means_no_limit(app):
+    app.extensions["grader"].store.update(free_checks_per_hour=0)
+    client = app.test_client()
+    for n in range(8):
+        assert "/check/" in free_check(client, f"d{n}.example.com").location
+    assert len(app.scanned) == 8
+
+
 def test_check_again_rescans_instead_of_reusing(app):
     client = app.test_client()
     first = free_check(client, "a.example.com").location

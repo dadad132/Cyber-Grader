@@ -133,7 +133,7 @@ class Settings:
     mail_from: str = ""
     # Free checks, domain-owner unlocks and "have us fix it" requests (lead generation)
     free_checks_enabled: bool = True
-    free_checks_per_hour: int = 5  # per visitor
+    free_checks_per_hour: int = 5  # per visitor; 0 = no limit
     owner_unlock_free: bool = True  # verified owners (code sent to an @theirdomain mailbox) see their full report free
     dfy_enabled: bool = True
     dfy_minor_cents: int = 79900
@@ -502,7 +502,7 @@ def growth_from_form(current: Settings, data: Mapping[str, str]) -> tuple[Settin
     updated = replace(
         current,
         free_checks_enabled=form.flag("free_checks_enabled"),
-        free_checks_per_hour=form.number("free_checks_per_hour", "Free checks per visitor per hour", int, 1, 100),
+        free_checks_per_hour=form.number("free_checks_per_hour", "Free checks per visitor per hour", int, 0, 100),
         owner_unlock_free=form.flag("owner_unlock_free"),
         dfy_enabled=form.flag("dfy_enabled"),
         dfy_minor_cents=form.rands("dfy_minor", "Minor tune-up price"),

@@ -136,8 +136,8 @@
       with a credit, for the verified owner, or for you.</p>
     {{ ui.checkbox('free_checks_enabled', 'Offer free checks on the website', values.free_checks_enabled,
                    'Strongly recommended: free checks are what people search for, and they turn into sign-ups and leads.') }}
-    {{ ui.field('free_checks_per_hour', 'Free checks per visitor per hour', values.free_checks_per_hour, type='number', attrs='min="1" max="100" required',
-                help="Re-checking the same domain within an hour reuses the result and doesn't count.") }}
+    {{ ui.field('free_checks_per_hour', 'Free checks per visitor per hour', values.free_checks_per_hour, type='number', attrs='min="0" max="100" required',
+                help="0 = no limit (handy for testing, not for a public site). Re-checking the same domain within 5 minutes reuses the result and doesn't count.") }}
     {{ ui.checkbox('owner_unlock_free', 'Let verified owners unlock their own report free', values.owner_unlock_free,
                    'They prove ownership with a 6-digit code sent to an address at that domain (expires in 15 minutes, 5 attempts). '
                    'Every verified owner becomes a lead. Needs email to be set up.') }}

@@ -19,7 +19,6 @@ import secrets
 import sqlite3
 import sys
 from datetime import datetime, timedelta
-from pathlib import Path
 
 from flask import Flask, render_template
 from werkzeug.security import generate_password_hash

@@ -122,7 +122,7 @@ def create_preview_blueprint(service: GraderService) -> Blueprint:
                   "Changed something since? Use “Check again”.", "info")
         else:
             free_limiter.limit = settings.free_checks_per_hour
-            if not free_limiter.allow(client_ip()):
+            if settings.free_checks_per_hour and not free_limiter.allow(client_ip()):  # 0 = no limit
                 flash("You've used your free checks for now. Create a free account to keep going, or try again in an hour.", "err")
                 return redirect(url_for("site.signup"))
             try:

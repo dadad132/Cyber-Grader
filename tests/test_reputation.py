@@ -178,7 +178,7 @@ def smtp_result(host="mail.example.com", **overrides):
     (smtp_result(offered=False, starttls=False, trusted=False, tls=""), Status.FAIL, Severity.HIGH),
     (smtp_result(trusted=False, tls="", cert_error="hostname mismatch"), Status.WARN, Severity.LOW),
     (smtp_result(starttls=False, trusted=False, tls="", cert_error="the TLS handshake failed (x)"), Status.FAIL, Severity.HIGH),
-    (smtp_result(refused=True, error="refused the grader's connection (554 blocked)"), Status.SKIP, Severity.INFO),
+    (smtp_result(refused=True, error="refused the grader's connection (554 blocked)"), Status.ERROR, Severity.INFO),
     (smtp_result(reached=False, banner="", error="couldn't connect (TimeoutError)"), Status.FAIL, Severity.MEDIUM),
 ])
 def test_starttls_outcomes(make_ctx, monkeypatch, probe, status, severity):
@@ -192,7 +192,8 @@ def test_blocked_port_25_is_not_tested_and_not_blamed_on_the_domain(make_ctx, mo
     monkeypatch.setattr(smtp, "port25_open", lambda timeout=5.0: False)
     monkeypatch.setattr(smtp, "probe", lambda ctx, host: pytest.fail("shouldn't try to connect"))
     result = check(make_ctx(mx={"example.com": [(10, "mail.example.com")]}), "smtp_starttls")
-    assert result.status is Status.SKIP and "port 25" in result.summary
+    assert result.status is Status.ERROR and "port 25" in result.summary
+    assert not result.scored  # the grader's own network mustn't cost the domain points
 
 
 # --- settings ------------------------------------------------------------------------------------------

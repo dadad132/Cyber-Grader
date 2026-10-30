@@ -13,7 +13,8 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from ..models import NotTested, Outcome, Severity
+from ..dnsutil import Inconclusive
+from ..models import Outcome, Severity
 from ..target import BlockedTarget
 from . import EMAIL, check
 from .mail import _require_mail
@@ -97,7 +98,7 @@ def _describe(r: dict) -> str:
 def check_smtp_starttls(ctx) -> Outcome:
     setup = _require_mail(ctx)
     if not port25_open():  # checked first (and cached) so a blocked network doesn't make every scan wait
-        raise NotTested("Not tested: the grader's network blocks outgoing connections to mail servers (port 25).")
+        raise Inconclusive("Not tested: the grader's network blocks outgoing connections to mail servers (port 25).")
     hosts = setup.hosts[:MAX_HOSTS]
     with ThreadPoolExecutor(max_workers=len(hosts)) as pool:
         results = list(pool.map(lambda host: probe(ctx, host), hosts))
@@ -106,7 +107,7 @@ def check_smtp_starttls(ctx) -> Outcome:
     if not tested:
         incomplete = [r for r in results if r["reached"]]
         if incomplete:
-            raise NotTested(f"Not tested: {incomplete[0]['host']} {incomplete[0]['error']}.")
+            raise Inconclusive(f"Not tested: {incomplete[0]['host']} {incomplete[0]['error']}.")
         return Outcome.fail(MEDIUM, f"Couldn't connect to your mail server{'s' if len(hosts) > 1 else ''} on port 25, so email "
                                     "sent to you may be delayed or bounce.",
                             "Check that the mail server is running and that its firewall accepts connections on port 25 "
